@@ -1,0 +1,9 @@
+<UserControl x:Class="RadialLauncher.Views.WheelPreview"
+             xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
+             xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+             MinHeight="240"
+             ClipToBounds="True">
+    <Border Background="#22000000" CornerRadius="6" BorderBrush="#22000000" BorderThickness="1">
+        <Canvas x:Name="Surface" ClipToBounds="True"/>
+    </Border>
+</UserControl>

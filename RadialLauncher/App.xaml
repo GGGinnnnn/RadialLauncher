@@ -1,0 +1,15 @@
+<Application x:Class="RadialLauncher.App"
+             xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
+             xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+             ShutdownMode="OnExplicitShutdown">
+    <Application.Resources>
+        <ResourceDictionary>
+            <ResourceDictionary.MergedDictionaries>
+                <!-- 设计标记：颜色 / 字体 / 文字样式 -->
+                <ResourceDictionary Source="Styles/Theme.xaml"/>
+                <!-- 控件外观：按钮 / 开关 / 滑条 / 卡片 / 导航 … -->
+                <ResourceDictionary Source="Styles/Controls.xaml"/>
+            </ResourceDictionary.MergedDictionaries>
+        </ResourceDictionary>
+    </Application.Resources>
+</Application>

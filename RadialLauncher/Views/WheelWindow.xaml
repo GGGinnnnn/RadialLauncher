@@ -1,0 +1,102 @@
+<Window x:Class="RadialLauncher.Views.WheelWindow"
+        xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
+        xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+        xmlns:controls="clr-namespace:RadialLauncher.Controls"
+        Title="Wheel"
+        WindowStyle="None"
+        AllowsTransparency="True"
+        Background="Transparent"
+        ShowInTaskbar="False"
+        ShowActivated="False"
+        Focusable="False"
+        Topmost="True"
+        ResizeMode="NoResize"
+        SizeToContent="Manual"
+        Width="480" Height="480">
+
+    <Window.Resources>
+        <!-- 圆形选项按钮；尺寸由代码按配置设置 -->
+        <Style x:Key="WheelButtonStyle" TargetType="Button">
+            <Setter Property="Foreground" Value="White"/>
+            <Setter Property="Background" Value="#E62A2A3A"/>
+            <Setter Property="BorderBrush" Value="#66FFFFFF"/>
+            <Setter Property="BorderThickness" Value="1.5"/>
+            <Setter Property="Cursor" Value="Arrow"/>
+            <Setter Property="Focusable" Value="False"/>
+            <Setter Property="IsHitTestVisible" Value="False"/>
+            <Setter Property="RenderTransformOrigin" Value="0.5,0.5"/>
+            <Setter Property="Template">
+                <Setter.Value>
+                    <ControlTemplate TargetType="Button">
+                        <Grid>
+                            <Ellipse Fill="{TemplateBinding Background}"
+                                     Stroke="{TemplateBinding BorderBrush}"
+                                     StrokeThickness="{TemplateBinding BorderThickness}"/>
+                            <ContentPresenter HorizontalAlignment="Center" VerticalAlignment="Center"/>
+                        </Grid>
+                    </ControlTemplate>
+                </Setter.Value>
+            </Setter>
+        </Style>
+    </Window.Resources>
+
+    <!-- 根容器整体做缩放动画；IsHitTestVisible=False 让鼠标事件穿透到下面的窗口 -->
+    <Grid x:Name="Root" RenderTransformOrigin="0.5,0.5" IsHitTestVisible="False" Opacity="1">
+        <Grid.RenderTransform>
+            <ScaleTransform x:Name="RootScale" ScaleX="1" ScaleY="1"/>
+        </Grid.RenderTransform>
+
+        <!-- 外发光 -->
+        <Ellipse x:Name="GlowEllipse"
+                 Width="380" Height="380"
+                 IsHitTestVisible="False"
+                 Opacity="0.75">
+            <Ellipse.Effect>
+                <DropShadowEffect Color="#FF4A9EFF" BlurRadius="48" ShadowDepth="0" Opacity="1"/>
+            </Ellipse.Effect>
+        </Ellipse>
+
+        <!-- 底板 -->
+        <Ellipse x:Name="PlateEllipse"
+                 Width="380" Height="380"
+                 Fill="#E61A1A2E"
+                 Stroke="#FF4A9EFF"
+                 StrokeThickness="2"
+                 IsHitTestVisible="False"/>
+
+        <!-- 内圈装饰 -->
+        <Ellipse x:Name="InnerEllipse"
+                 Width="130" Height="130"
+                 Fill="#1FFFFFFF"
+                 IsHitTestVisible="False"/>
+
+        <!-- 轮盘本体 -->
+        <controls:RadialMenu x:Name="Menu"
+                             ItemCount="8"
+                             Radius="144"
+                             HorizontalAlignment="Center"
+                             VerticalAlignment="Center"
+                             IsHitTestVisible="False"/>
+
+        <!-- 中心提示 -->
+        <StackPanel x:Name="CenterPanel"
+                    HorizontalAlignment="Center"
+                    VerticalAlignment="Center"
+                    IsHitTestVisible="False">
+            <TextBlock x:Name="CenterTitle"
+                       Text="松开执行"
+                       TextAlignment="Center"
+                       TextWrapping="Wrap"
+                       MaxWidth="120"
+                       Foreground="White"
+                       FontSize="14"
+                       FontWeight="SemiBold"/>
+            <TextBlock x:Name="CenterSubtitle"
+                       Text="Esc 取消"
+                       TextAlignment="Center"
+                       Margin="0,3,0,0"
+                       Foreground="#99FFFFFF"
+                       FontSize="11"/>
+        </StackPanel>
+    </Grid>
+</Window>

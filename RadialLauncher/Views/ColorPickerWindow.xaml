@@ -1,0 +1,143 @@
+<Window x:Class="RadialLauncher.Views.ColorPickerWindow"
+        xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
+        xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+        xmlns:services="clr-namespace:RadialLauncher.Services"
+        Title="{Binding [Color_Title], Source={x:Static services:Loc.Instance}}"
+        Width="420" SizeToContent="Height"
+        WindowStartupLocation="CenterOwner"
+        ResizeMode="NoResize"
+        ShowInTaskbar="False">
+
+    <Grid Margin="16">
+        <Grid.RowDefinitions>
+            <RowDefinition Height="Auto"/>
+            <RowDefinition Height="Auto"/>
+            <RowDefinition Height="Auto"/>
+            <RowDefinition Height="Auto"/>
+            <RowDefinition Height="Auto"/>
+        </Grid.RowDefinitions>
+
+        <!-- 饱和度 / 明度 面板 -->
+        <Border Grid.Row="0" BorderBrush="#33000000" BorderThickness="1" Height="180">
+            <Grid x:Name="SvGrid" ClipToBounds="True" Background="Transparent"
+                  Cursor="Cross"
+                  SizeChanged="OnSvSizeChanged"
+                  MouseLeftButtonDown="OnSvMouseDown"
+                  MouseMove="OnSvMouseMove"
+                  MouseLeftButtonUp="OnSvMouseUp">
+                <Rectangle x:Name="HueLayer"/>
+                <Rectangle>
+                    <Rectangle.Fill>
+                        <LinearGradientBrush StartPoint="0,0" EndPoint="1,0">
+                            <GradientStop Color="#FFFFFFFF" Offset="0"/>
+                            <GradientStop Color="#00FFFFFF" Offset="1"/>
+                        </LinearGradientBrush>
+                    </Rectangle.Fill>
+                </Rectangle>
+                <Rectangle>
+                    <Rectangle.Fill>
+                        <LinearGradientBrush StartPoint="0,0" EndPoint="0,1">
+                            <GradientStop Color="#00000000" Offset="0"/>
+                            <GradientStop Color="#FF000000" Offset="1"/>
+                        </LinearGradientBrush>
+                    </Rectangle.Fill>
+                </Rectangle>
+                <Canvas IsHitTestVisible="False">
+                    <Ellipse x:Name="SvThumb" Width="14" Height="14" Stroke="White" StrokeThickness="2">
+                        <Ellipse.Effect>
+                            <DropShadowEffect Color="Black" BlurRadius="4" ShadowDepth="0" Opacity="0.8"/>
+                        </Ellipse.Effect>
+                    </Ellipse>
+                </Canvas>
+            </Grid>
+        </Border>
+
+        <!-- 色相 + 透明度 -->
+        <Grid Grid.Row="1" Margin="0,12,0,0">
+            <Grid.ColumnDefinitions>
+                <ColumnDefinition Width="Auto"/>
+                <ColumnDefinition Width="*"/>
+                <ColumnDefinition Width="58"/>
+            </Grid.ColumnDefinitions>
+            <Grid.RowDefinitions>
+                <RowDefinition Height="Auto"/>
+                <RowDefinition Height="Auto"/>
+            </Grid.RowDefinitions>
+
+            <TextBlock Grid.Row="0" Grid.Column="0" Text="{Binding [Color_Hue], Source={x:Static services:Loc.Instance}}"
+                       VerticalAlignment="Center" Margin="0,0,8,0"/>
+            <Border Grid.Row="0" Grid.Column="1" Height="14" VerticalAlignment="Center" CornerRadius="3">
+                <Border.Background>
+                    <LinearGradientBrush StartPoint="0,0" EndPoint="1,0">
+                        <GradientStop Color="#FFFF0000" Offset="0"/>
+                        <GradientStop Color="#FFFFFF00" Offset="0.1667"/>
+                        <GradientStop Color="#FF00FF00" Offset="0.3333"/>
+                        <GradientStop Color="#FF00FFFF" Offset="0.5"/>
+                        <GradientStop Color="#FF0000FF" Offset="0.6667"/>
+                        <GradientStop Color="#FFFF00FF" Offset="0.8333"/>
+                        <GradientStop Color="#FFFF0000" Offset="1"/>
+                    </LinearGradientBrush>
+                </Border.Background>
+            </Border>
+            <Slider x:Name="HueSlider" Grid.Row="0" Grid.Column="1" Minimum="0" Maximum="360"
+                    VerticalAlignment="Center" Background="Transparent"
+                    IsSnapToTickEnabled="True" TickFrequency="1"
+                    ValueChanged="OnHueChanged" Margin="0"/>
+
+            <TextBlock Grid.Row="1" Grid.Column="0" Text="{Binding [Color_Alpha], Source={x:Static services:Loc.Instance}}"
+                       VerticalAlignment="Center" Margin="0,8,8,0"/>
+            <Border Grid.Row="1" Grid.Column="1" Height="14" VerticalAlignment="Center" Margin="0,8,0,0"
+                    CornerRadius="3" Background="#FFFFFFFF">
+                <Border.Opacity>0.35</Border.Opacity>
+            </Border>
+            <Slider x:Name="AlphaSlider" Grid.Row="1" Grid.Column="1" Minimum="0" Maximum="255"
+                    VerticalAlignment="Center" Margin="0,8,0,0"
+                    IsSnapToTickEnabled="True" TickFrequency="1"
+                    ValueChanged="OnAlphaChanged"/>
+
+            <TextBlock x:Name="AlphaText" Grid.Row="1" Grid.Column="2" Text="255"
+                       VerticalAlignment="Center" Margin="8,8,0,0" TextAlignment="Right"/>
+        </Grid>
+
+        <!-- 十六进制 + 预览 -->
+        <Grid Grid.Row="2" Margin="0,14,0,0">
+            <Grid.ColumnDefinitions>
+                <ColumnDefinition Width="Auto"/>
+                <ColumnDefinition Width="150"/>
+                <ColumnDefinition Width="*"/>
+                <ColumnDefinition Width="Auto"/>
+            </Grid.ColumnDefinitions>
+
+            <TextBlock Grid.Column="0" Text="{Binding [Color_Hex], Source={x:Static services:Loc.Instance}}"
+                       VerticalAlignment="Center" Margin="0,0,8,0"/>
+            <TextBox x:Name="HexBox" Grid.Column="1" VerticalContentAlignment="Center" Padding="6,4"
+                     TextChanged="OnHexChanged" FontFamily="Consolas"/>
+            <Border x:Name="PreviewSwatch" Grid.Column="2" Height="30" Margin="8,0" CornerRadius="4"
+                    BorderBrush="#33000000" BorderThickness="1"/>
+            <Button Grid.Column="3" Padding="12,5"
+                    Content="{Binding [Color_Eyedropper], Source={x:Static services:Loc.Instance}}"
+                    Click="OnEyedropper"/>
+        </Grid>
+
+        <!-- 预设 -->
+        <StackPanel Grid.Row="3" Margin="0,16,0,0">
+            <TextBlock Text="{Binding [Color_Presets], Source={x:Static services:Loc.Instance}}"
+                       FontWeight="SemiBold" Margin="0,0,0,6"/>
+            <ItemsControl x:Name="PresetList">
+                <ItemsControl.ItemsPanel>
+                    <ItemsPanelTemplate>
+                        <WrapPanel/>
+                    </ItemsPanelTemplate>
+                </ItemsControl.ItemsPanel>
+            </ItemsControl>
+        </StackPanel>
+
+        <!-- 按钮 -->
+        <StackPanel Grid.Row="4" Orientation="Horizontal" HorizontalAlignment="Right" Margin="0,18,0,0">
+            <Button Content="{Binding [Common_OK], Source={x:Static services:Loc.Instance}}"
+                    Click="OnOk" Padding="20,6" Margin="0,0,8,0" IsDefault="True"/>
+            <Button Content="{Binding [Common_Cancel], Source={x:Static services:Loc.Instance}}"
+                    Click="OnCancel" Padding="20,6" IsCancel="True"/>
+        </StackPanel>
+    </Grid>
+</Window>

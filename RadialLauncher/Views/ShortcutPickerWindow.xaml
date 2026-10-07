@@ -1,0 +1,60 @@
+<Window x:Class="RadialLauncher.Views.ShortcutPickerWindow"
+        xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
+        xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+        xmlns:services="clr-namespace:RadialLauncher.Services"
+        Title="{Binding [Shortcut_Title], Source={x:Static services:Loc.Instance}}"
+        Width="720" Height="560"
+        WindowStartupLocation="CenterOwner"
+        ShowInTaskbar="False">
+
+    <Grid Margin="12">
+        <Grid.RowDefinitions>
+            <RowDefinition Height="Auto"/>
+            <RowDefinition Height="*"/>
+            <RowDefinition Height="Auto"/>
+        </Grid.RowDefinitions>
+
+        <!-- 搜索 + 分类 -->
+        <Grid Grid.Row="0" Margin="0,0,0,10">
+            <Grid.ColumnDefinitions>
+                <ColumnDefinition Width="*"/>
+                <ColumnDefinition Width="Auto"/>
+                <ColumnDefinition Width="180"/>
+            </Grid.ColumnDefinitions>
+
+            <TextBox x:Name="SearchBox" Grid.Column="0" Padding="6,5" VerticalContentAlignment="Center"
+                     TextChanged="OnSearchChanged"/>
+            <TextBlock Grid.Column="1" Margin="10,0,6,0" VerticalAlignment="Center"
+                       Text="{Binding [Shortcut_Category], Source={x:Static services:Loc.Instance}}"/>
+            <ComboBox x:Name="CategoryBox" Grid.Column="2" SelectionChanged="OnCategoryChanged"/>
+        </Grid>
+
+        <!-- 列表 -->
+        <DataGrid x:Name="Grid" Grid.Row="1"
+                  AutoGenerateColumns="False"
+                  CanUserAddRows="False"
+                  CanUserDeleteRows="False"
+                  IsReadOnly="True"
+                  SelectionMode="Single"
+                  HeadersVisibility="Column"
+                  GridLinesVisibility="Horizontal"
+                  RowHeight="26"
+                  MouseDoubleClick="OnRowDoubleClick">
+            <DataGrid.Columns>
+                <DataGridTextColumn Header="{Binding [Shortcut_Category], Source={x:Static services:Loc.Instance}}"
+                                    Binding="{Binding Category}" Width="150"/>
+                <DataGridTextColumn Header="{Binding [Shortcut_Name], Source={x:Static services:Loc.Instance}}"
+                                    Binding="{Binding Name}" Width="*"/>
+                <DataGridTextColumn Header="{Binding [Shortcut_Keys], Source={x:Static services:Loc.Instance}}"
+                                    Binding="{Binding Keys}" Width="200"/>
+            </DataGrid.Columns>
+        </DataGrid>
+
+        <StackPanel Grid.Row="2" Orientation="Horizontal" HorizontalAlignment="Right" Margin="0,10,0,0">
+            <Button Content="{Binding [Shortcut_Select], Source={x:Static services:Loc.Instance}}"
+                    Click="OnSelect" Padding="18,6" Margin="0,0,8,0" IsDefault="True"/>
+            <Button Content="{Binding [Common_Cancel], Source={x:Static services:Loc.Instance}}"
+                    Click="OnCancel" Padding="18,6" IsCancel="True"/>
+        </StackPanel>
+    </Grid>
+</Window>

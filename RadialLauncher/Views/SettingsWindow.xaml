@@ -1,0 +1,999 @@
+<Window x:Class="RadialLauncher.Views.SettingsWindow"
+        xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
+        xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+        xmlns:services="clr-namespace:RadialLauncher.Services"
+        xmlns:views="clr-namespace:RadialLauncher.Views"
+        Title="{Binding [App_Title], Source={x:Static services:Loc.Instance}}"
+        Width="1200" Height="830"
+        MinWidth="980" MinHeight="640"
+        WindowStartupLocation="CenterScreen"
+        FontFamily="{DynamicResource AppFontFamily}"
+        Background="{StaticResource WindowBackgroundBrush}">
+
+    <Window.Resources>
+        <!-- 旧页面用的样式名，这里改成指向新主题，页面标记基本不用动 -->
+        <Style x:Key="FieldLabel" TargetType="TextBlock" BasedOn="{StaticResource FieldLabelText}">
+            <Setter Property="Margin" Value="0,0,10,0"/>
+        </Style>
+
+        <Style x:Key="MiniButton" TargetType="Button" BasedOn="{StaticResource {x:Type Button}}">
+            <Setter Property="Margin" Value="0,0,8,0"/>
+        </Style>
+
+        <Style x:Key="ColorSwatch" TargetType="Border">
+            <Setter Property="Width" Value="34"/>
+            <Setter Property="Height" Value="26"/>
+            <Setter Property="CornerRadius" Value="5"/>
+            <Setter Property="BorderBrush" Value="#33000000"/>
+            <Setter Property="BorderThickness" Value="1"/>
+            <Setter Property="Cursor" Value="Hand"/>
+        </Style>
+    </Window.Resources>
+
+    <Grid>
+        <Grid.RowDefinitions>
+            <RowDefinition Height="Auto"/>
+            <RowDefinition Height="*"/>
+            <RowDefinition Height="Auto"/>
+        </Grid.RowDefinitions>
+
+        <!-- ==================== 顶部：折叠按钮 + 标题 ==================== -->
+        <Grid Grid.Row="0" Margin="14,12,18,10">
+            <StackPanel Orientation="Horizontal" VerticalAlignment="Center">
+                <Button x:Name="NavToggleButton" Style="{StaticResource IconButton}"
+                        Click="OnToggleNav"
+                        Content="&#xE700;"
+                        ToolTip="{Binding [Nav_Toggle], Source={x:Static services:Loc.Instance}}"/>
+                <Border Width="30" Height="30" CornerRadius="8" Margin="10,0,0,0"
+                        Background="{StaticResource AccentBrush}">
+                    <TextBlock Text="◎" FontSize="16" Foreground="White"
+                               HorizontalAlignment="Center" VerticalAlignment="Center"/>
+                </Border>
+                <TextBlock Text="{Binding [App_Title], Source={x:Static services:Loc.Instance}}"
+                           FontSize="19" FontWeight="SemiBold" Margin="10,0,0,0"
+                           VerticalAlignment="Center"
+                           Foreground="{StaticResource TextPrimaryBrush}"/>
+            </StackPanel>
+
+            <TextBlock x:Name="TxtHeaderVersion" HorizontalAlignment="Right" VerticalAlignment="Center"
+                       Style="{StaticResource HintText}"/>
+        </Grid>
+
+        <!-- ==================== 主体：侧边栏 + 内容 ==================== -->
+        <Grid Grid.Row="1" Margin="12,0,12,0">
+            <Grid.ColumnDefinitions>
+                <ColumnDefinition Width="Auto"/>
+                <ColumnDefinition Width="*"/>
+            </Grid.ColumnDefinitions>
+
+            <!-- 侧边栏 -->
+            <Border x:Name="NavPanel" Grid.Column="0" Width="248"
+                    ClipToBounds="True"
+                    Background="{StaticResource SubtleFillBrush}"
+                    CornerRadius="8" Padding="0,6">
+                <ScrollViewer VerticalScrollBarVisibility="Auto" HorizontalScrollBarVisibility="Disabled">
+                    <StackPanel>
+
+                        <RadioButton x:Name="NavGeneral" Style="{StaticResource NavItemStyle}" GroupName="Nav"
+                                     IsChecked="True" Tag="General" Checked="OnNavChanged">
+                            <StackPanel Orientation="Horizontal">
+                                <TextBlock Text="🏠" FontSize="16" VerticalAlignment="Center"/>
+                                <TextBlock x:Name="NavText0" Margin="14,0,0,0" VerticalAlignment="Center"
+                                           Text="{Binding [Tab_General], Source={x:Static services:Loc.Instance}}"/>
+                            </StackPanel>
+                        </RadioButton>
+
+                        <RadioButton x:Name="NavTrigger" Style="{StaticResource NavItemStyle}" GroupName="Nav"
+                                     Tag="Trigger" Checked="OnNavChanged">
+                            <StackPanel Orientation="Horizontal">
+                                <TextBlock Text="⚡" FontSize="16" VerticalAlignment="Center"/>
+                                <TextBlock x:Name="NavText1" Margin="14,0,0,0" VerticalAlignment="Center"
+                                           Text="{Binding [Tab_Trigger], Source={x:Static services:Loc.Instance}}"/>
+                            </StackPanel>
+                        </RadioButton>
+
+                        <RadioButton x:Name="NavProfiles" Style="{StaticResource NavItemStyle}" GroupName="Nav"
+                                     Tag="Profiles" Checked="OnNavChanged">
+                            <StackPanel Orientation="Horizontal">
+                                <TextBlock Text="🧩" FontSize="16" VerticalAlignment="Center"/>
+                                <TextBlock x:Name="NavText2" Margin="14,0,0,0" VerticalAlignment="Center"
+                                           Text="{Binding [Tab_Profiles], Source={x:Static services:Loc.Instance}}"/>
+                            </StackPanel>
+                        </RadioButton>
+
+                        <RadioButton x:Name="NavAppearance" Style="{StaticResource NavItemStyle}" GroupName="Nav"
+                                     Tag="Appearance" Checked="OnNavChanged">
+                            <StackPanel Orientation="Horizontal">
+                                <TextBlock Text="🎨" FontSize="16" VerticalAlignment="Center"/>
+                                <TextBlock x:Name="NavText3" Margin="14,0,0,0" VerticalAlignment="Center"
+                                           Text="{Binding [Tab_Appearance], Source={x:Static services:Loc.Instance}}"/>
+                            </StackPanel>
+                        </RadioButton>
+
+                        <RadioButton x:Name="NavFunctions" Style="{StaticResource NavItemStyle}" GroupName="Nav"
+                                     Tag="Functions" Checked="OnNavChanged">
+                            <StackPanel Orientation="Horizontal">
+                                <TextBlock Text="🧰" FontSize="16" VerticalAlignment="Center"/>
+                                <TextBlock x:Name="NavText4" Margin="14,0,0,0" VerticalAlignment="Center"
+                                           Text="{Binding [Tab_Functions], Source={x:Static services:Loc.Instance}}"/>
+                            </StackPanel>
+                        </RadioButton>
+
+                        <RadioButton x:Name="NavSystem" Style="{StaticResource NavItemStyle}" GroupName="Nav"
+                                     Tag="System" Checked="OnNavChanged">
+                            <StackPanel Orientation="Horizontal">
+                                <TextBlock Text="⚙" FontSize="16" VerticalAlignment="Center"/>
+                                <TextBlock x:Name="NavText5" Margin="14,0,0,0" VerticalAlignment="Center"
+                                           Text="{Binding [Tab_System], Source={x:Static services:Loc.Instance}}"/>
+                            </StackPanel>
+                        </RadioButton>
+
+                        <RadioButton x:Name="NavAbout" Style="{StaticResource NavItemStyle}" GroupName="Nav"
+                                     Tag="About" Checked="OnNavChanged">
+                            <StackPanel Orientation="Horizontal">
+                                <TextBlock Text="ℹ" FontSize="16" VerticalAlignment="Center"/>
+                                <TextBlock x:Name="NavText6" Margin="14,0,0,0" VerticalAlignment="Center"
+                                           Text="{Binding [Tab_About], Source={x:Static services:Loc.Instance}}"/>
+                            </StackPanel>
+                        </RadioButton>
+
+                    </StackPanel>
+                </ScrollViewer>
+            </Border>
+
+            <!-- 内容区 -->
+            <Grid x:Name="PageHost" Grid.Column="1" Margin="16,0,0,0">
+
+                <!-- ============ 总览 ============ -->
+                <Grid x:Name="PageGeneral" Visibility="Visible">
+                    <ScrollViewer VerticalScrollBarVisibility="Auto">
+                        <StackPanel>
+                            <StackPanel Orientation="Horizontal" Margin="0,0,0,16">
+                                <Border Style="{StaticResource PageChipBorder}"
+                                        Background="{StaticResource ChipBlueSoftBrush}">
+                                    <TextBlock Text="🏠" FontSize="19"
+                                               HorizontalAlignment="Center" VerticalAlignment="Center"/>
+                                </Border>
+                                <StackPanel Margin="14,0,0,0" VerticalAlignment="Center">
+                                    <TextBlock Style="{StaticResource PageTitleText}"
+                                               Text="{Binding [Tab_General], Source={x:Static services:Loc.Instance}}"/>
+                                    <TextBlock Style="{StaticResource PageSubtitleText}"
+                                               Text="{Binding [General_Subtitle], Source={x:Static services:Loc.Instance}}"/>
+                                </StackPanel>
+                            </StackPanel>
+
+                            <GroupBox Header="{Binding [General_Status], Source={x:Static services:Loc.Instance}}">
+                                <StackPanel>
+                                    <CheckBox x:Name="CbTriggerEnabled" FontWeight="SemiBold"
+                                              Content="{Binding [General_EnableWheel], Source={x:Static services:Loc.Instance}}"
+                                              Checked="OnTriggerEnabledChanged" Unchecked="OnTriggerEnabledChanged"/>
+
+                                    <Grid Margin="0,12,0,0">
+                                        <Grid.ColumnDefinitions>
+                                            <ColumnDefinition Width="160"/>
+                                            <ColumnDefinition Width="*"/>
+                                        </Grid.ColumnDefinitions>
+                                        <Grid.RowDefinitions>
+                                            <RowDefinition Height="30"/>
+                                            <RowDefinition Height="30"/>
+                                            <RowDefinition Height="30"/>
+                                            <RowDefinition Height="30"/>
+                                        </Grid.RowDefinitions>
+
+                                        <TextBlock Grid.Row="0" Grid.Column="0" Style="{StaticResource FieldLabel}"
+                                                   Text="{Binding [General_TriggerKeys], Source={x:Static services:Loc.Instance}}"/>
+                                        <TextBlock x:Name="TxtStatusKeys" Grid.Row="0" Grid.Column="1" VerticalAlignment="Center"/>
+
+                                        <TextBlock Grid.Row="1" Grid.Column="0" Style="{StaticResource FieldLabel}"
+                                                   Text="{Binding [General_HoldTime], Source={x:Static services:Loc.Instance}}"/>
+                                        <TextBlock x:Name="TxtStatusHold" Grid.Row="1" Grid.Column="1" VerticalAlignment="Center"/>
+
+                                        <TextBlock Grid.Row="2" Grid.Column="0" Style="{StaticResource FieldLabel}"
+                                                   Text="{Binding [General_Environment], Source={x:Static services:Loc.Instance}}"/>
+                                        <TextBlock x:Name="TxtStatusEnv" Grid.Row="2" Grid.Column="1" VerticalAlignment="Center"/>
+
+                                        <TextBlock Grid.Row="3" Grid.Column="0" Style="{StaticResource FieldLabel}"
+                                                   Text="{Binding [General_Foreground], Source={x:Static services:Loc.Instance}}"/>
+                                        <TextBlock x:Name="TxtStatusForeground" Grid.Row="3" Grid.Column="1"
+                                                   VerticalAlignment="Center" TextTrimming="CharacterEllipsis"/>
+                                    </Grid>
+                                </StackPanel>
+                            </GroupBox>
+
+                            <TextBlock x:Name="TxtGeneralHint" Style="{StaticResource HintText}" Margin="2,0,0,14"/>
+
+                            <StackPanel Orientation="Horizontal">
+                                <Button Style="{StaticResource MiniButton}"
+                                        Content="{Binding [General_TestNow], Source={x:Static services:Loc.Instance}}"
+                                        Click="OnTestWheel"/>
+                                <Button Style="{StaticResource MiniButton}"
+                                        Content="{Binding [General_OpenData], Source={x:Static services:Loc.Instance}}"
+                                        Click="OnOpenDataFolder"/>
+                                <Button Style="{StaticResource MiniButton}"
+                                        Content="{Binding [General_Reload], Source={x:Static services:Loc.Instance}}"
+                                        Click="OnReloadConfig"/>
+                            </StackPanel>
+                        </StackPanel>
+                    </ScrollViewer>
+                </Grid>
+
+                <!-- ============ 触发环境 ============ -->
+                <Grid x:Name="PageTrigger" Visibility="Collapsed">
+                    <ScrollViewer VerticalScrollBarVisibility="Auto">
+                        <StackPanel>
+                            <StackPanel Orientation="Horizontal" Margin="0,0,0,16">
+                                <Border Style="{StaticResource PageChipBorder}"
+                                        Background="{StaticResource ChipMagentaSoftBrush}">
+                                    <TextBlock Text="⚡" FontSize="19"
+                                               HorizontalAlignment="Center" VerticalAlignment="Center"/>
+                                </Border>
+                                <StackPanel Margin="14,0,0,0" VerticalAlignment="Center">
+                                    <TextBlock Style="{StaticResource PageTitleText}"
+                                               Text="{Binding [Tab_Trigger], Source={x:Static services:Loc.Instance}}"/>
+                                    <TextBlock Style="{StaticResource PageSubtitleText}"
+                                               Text="{Binding [Trigger_Subtitle], Source={x:Static services:Loc.Instance}}"/>
+                                </StackPanel>
+                            </StackPanel>
+
+                            <GroupBox Header="{Binding [Trigger_Keys], Source={x:Static services:Loc.Instance}}">
+                                <StackPanel>
+                                    <StackPanel Orientation="Horizontal">
+                                        <CheckBox x:Name="CbCtrl" Margin="0,6,28,6"
+                                                  Content="{Binding [Trigger_Ctrl], Source={x:Static services:Loc.Instance}}"/>
+                                        <CheckBox x:Name="CbWin" Margin="0,6,28,6"
+                                                  Content="{Binding [Trigger_Win], Source={x:Static services:Loc.Instance}}"/>
+                                        <CheckBox x:Name="CbMiddle" Margin="0,6,0,6"
+                                                  Content="{Binding [Trigger_Middle], Source={x:Static services:Loc.Instance}}"/>
+                                    </StackPanel>
+
+                                    <Grid Margin="0,14,0,0">
+                                        <Grid.ColumnDefinitions>
+                                            <ColumnDefinition Width="230"/>
+                                            <ColumnDefinition Width="*"/>
+                                            <ColumnDefinition Width="76"/>
+                                        </Grid.ColumnDefinitions>
+
+                                        <TextBlock Grid.Column="0" Style="{StaticResource FieldLabel}"
+                                                   Text="{Binding [Trigger_Hold], Source={x:Static services:Loc.Instance}}"/>
+                                        <Slider x:Name="SldHold" Grid.Column="1" Minimum="60" Maximum="1000"
+                                                IsSnapToTickEnabled="True" TickFrequency="10"
+                                                VerticalAlignment="Center" ValueChanged="OnHoldChanged"/>
+                                        <Border Grid.Column="2" Margin="8,0,0,0" CornerRadius="5"
+                                                Background="{StaticResource AccentSoftBrush}" Padding="8,3">
+                                            <TextBlock x:Name="TxtHoldValue" HorizontalAlignment="Center"
+                                                       Foreground="{StaticResource AccentBrush}"
+                                                       FontWeight="SemiBold" FontSize="12.5"/>
+                                        </Border>
+                                    </Grid>
+
+                                    <TextBlock Text="{Binding [Trigger_CtrlNote], Source={x:Static services:Loc.Instance}}"
+                                               Style="{StaticResource HintText}" Margin="0,10,0,0"/>
+                                    <TextBlock Text="{Binding [Trigger_MiddleNote], Source={x:Static services:Loc.Instance}}"
+                                               Style="{StaticResource HintText}" Margin="0,4,0,0"/>
+                                </StackPanel>
+                            </GroupBox>
+
+                            <GroupBox Header="{Binding [Trigger_Behavior], Source={x:Static services:Loc.Instance}}">
+                                <StackPanel>
+                                    <CheckBox x:Name="CbSuppressWin"
+                                              Content="{Binding [Trigger_SuppressWin], Source={x:Static services:Loc.Instance}}"/>
+                                    <TextBlock Margin="50,0,0,4" Style="{StaticResource HintText}"
+                                               Text="{Binding [Trigger_WinSuppressNote], Source={x:Static services:Loc.Instance}}"/>
+
+                                    <CheckBox x:Name="CbSuppressMiddle"
+                                              Content="{Binding [Trigger_SuppressMiddle], Source={x:Static services:Loc.Instance}}"/>
+                                    <CheckBox x:Name="CbCancelOtherKey"
+                                              Content="{Binding [Trigger_CancelOnOtherKey], Source={x:Static services:Loc.Instance}}"/>
+                                    <CheckBox x:Name="CbSkipFullscreen"
+                                              Content="{Binding [Trigger_SkipFullscreen], Source={x:Static services:Loc.Instance}}"/>
+                                </StackPanel>
+                            </GroupBox>
+
+                            <GroupBox Header="{Binding [Trigger_Mode], Source={x:Static services:Loc.Instance}}">
+                                <StackPanel>
+                                    <RadioButton x:Name="RbBlacklist" GroupName="EnvMode"
+                                                 Content="{Binding [Trigger_Blacklist], Source={x:Static services:Loc.Instance}}"/>
+                                    <RadioButton x:Name="RbWhitelist" GroupName="EnvMode"
+                                                 Content="{Binding [Trigger_Whitelist], Source={x:Static services:Loc.Instance}}"/>
+                                </StackPanel>
+                            </GroupBox>
+
+                            <GroupBox Header="{Binding [Trigger_WindowDetector], Source={x:Static services:Loc.Instance}}">
+                                <Grid Height="300">
+                                    <Grid.ColumnDefinitions>
+                                        <ColumnDefinition Width="*"/>
+                                        <ColumnDefinition Width="Auto"/>
+                                        <ColumnDefinition Width="*"/>
+                                    </Grid.ColumnDefinitions>
+
+                                    <DockPanel Grid.Column="0" Margin="0,0,10,0">
+                                        <Button DockPanel.Dock="Bottom" Margin="0,8,0,0"
+                                                Content="{Binding [Common_Refresh], Source={x:Static services:Loc.Instance}}"
+                                                Click="OnRefreshWindows"/>
+                                        <ListBox x:Name="LstWindows" DisplayMemberPath="Display"/>
+                                    </DockPanel>
+
+                                    <StackPanel Grid.Column="1" VerticalAlignment="Center" Margin="0,0,10,0">
+                                        <Button Padding="12,6" Margin="0,0,0,8"
+                                                Content="{Binding [Trigger_AddBlack], Source={x:Static services:Loc.Instance}}"
+                                                Click="OnAddBlacklist"/>
+                                        <Button Padding="12,6"
+                                                Content="{Binding [Trigger_AddWhite], Source={x:Static services:Loc.Instance}}"
+                                                Click="OnAddWhitelist"/>
+                                    </StackPanel>
+
+                                    <Grid Grid.Column="2">
+                                        <Grid.RowDefinitions>
+                                            <RowDefinition Height="*"/>
+                                            <RowDefinition Height="*"/>
+                                        </Grid.RowDefinitions>
+
+                                        <DockPanel Grid.Row="0" Margin="0,0,0,6">
+                                            <TextBlock DockPanel.Dock="Top" Margin="0,0,0,6" FontWeight="SemiBold"
+                                                       FontSize="13"
+                                                       Text="{Binding [Trigger_BlacklistTitle], Source={x:Static services:Loc.Instance}}"/>
+                                            <Button DockPanel.Dock="Bottom" Margin="0,8,0,0" Padding="10,4"
+                                                    HorizontalAlignment="Left"
+                                                    Content="{Binding [Common_Remove], Source={x:Static services:Loc.Instance}}"
+                                                    Click="OnRemoveBlacklist"/>
+                                            <ListBox x:Name="LstBlack"/>
+                                        </DockPanel>
+
+                                        <DockPanel Grid.Row="1">
+                                            <TextBlock DockPanel.Dock="Top" Margin="0,0,0,6" FontWeight="SemiBold"
+                                                       FontSize="13"
+                                                       Text="{Binding [Trigger_WhitelistTitle], Source={x:Static services:Loc.Instance}}"/>
+                                            <Button DockPanel.Dock="Bottom" Margin="0,8,0,0" Padding="10,4"
+                                                    HorizontalAlignment="Left"
+                                                    Content="{Binding [Common_Remove], Source={x:Static services:Loc.Instance}}"
+                                                    Click="OnRemoveWhitelist"/>
+                                            <ListBox x:Name="LstWhite"/>
+                                        </DockPanel>
+                                    </Grid>
+                                </Grid>
+                            </GroupBox>
+                        </StackPanel>
+                    </ScrollViewer>
+                </Grid>
+
+                <!-- ============ 应用专属 ============ -->
+                <Grid x:Name="PageProfiles" Visibility="Collapsed">
+                    <Grid.RowDefinitions>
+                        <RowDefinition Height="Auto"/>
+                        <RowDefinition Height="*"/>
+                    </Grid.RowDefinitions>
+
+                    <StackPanel Grid.Row="0" Orientation="Horizontal" Margin="0,0,0,16">
+                        <Border Style="{StaticResource PageChipBorder}"
+                                Background="{StaticResource ChipGreenSoftBrush}">
+                            <TextBlock Text="🧩" FontSize="19"
+                                       HorizontalAlignment="Center" VerticalAlignment="Center"/>
+                        </Border>
+                        <StackPanel Margin="14,0,0,0" VerticalAlignment="Center">
+                            <TextBlock Style="{StaticResource PageTitleText}"
+                                       Text="{Binding [Tab_Profiles], Source={x:Static services:Loc.Instance}}"/>
+                            <TextBlock Style="{StaticResource PageSubtitleText}"
+                                       Text="{Binding [Profiles_Subtitle], Source={x:Static services:Loc.Instance}}"/>
+                        </StackPanel>
+                    </StackPanel>
+
+                    <Grid Grid.Row="1">
+                        <Grid.ColumnDefinitions>
+                            <ColumnDefinition Width="290"/>
+                            <ColumnDefinition Width="*"/>
+                        </Grid.ColumnDefinitions>
+
+                        <Border Grid.Column="0" Style="{StaticResource CardBorder}" Margin="0,0,14,0">
+                            <DockPanel>
+                                <CheckBox DockPanel.Dock="Top" x:Name="CbProfilesEnabled" FontWeight="SemiBold"
+                                          Margin="0,0,0,10"
+                                          Content="{Binding [Profiles_Enable], Source={x:Static services:Loc.Instance}}"/>
+
+                                <UniformGrid DockPanel.Dock="Bottom" Columns="2" Margin="0,10,0,0">
+                                    <Button Margin="0,0,4,4"
+                                            Content="{Binding [Profiles_New], Source={x:Static services:Loc.Instance}}"
+                                            Click="OnProfileNew"/>
+                                    <Button Margin="0,0,0,4"
+                                            Content="{Binding [Profiles_FromCurrent], Source={x:Static services:Loc.Instance}}"
+                                            Click="OnProfileFromCurrent"/>
+                                    <Button Margin="0,0,4,0"
+                                            Content="{Binding [Profiles_Duplicate], Source={x:Static services:Loc.Instance}}"
+                                            Click="OnProfileDuplicate"/>
+                                    <Button Margin="0,0,0,0"
+                                            Content="{Binding [Profiles_Delete], Source={x:Static services:Loc.Instance}}"
+                                            Click="OnProfileDelete"/>
+                                </UniformGrid>
+
+                                <ListBox x:Name="LstProfiles" SelectionChanged="OnProfileSelected"/>
+                            </DockPanel>
+                        </Border>
+
+                        <Border Grid.Column="1" Style="{StaticResource CardBorder}">
+                            <ScrollViewer VerticalScrollBarVisibility="Auto">
+                                <StackPanel x:Name="ProfileEditor">
+                                    <TextBlock x:Name="TxtProfileHint" Style="{StaticResource HintText}" Margin="0,0,0,12"
+                                               Text="{Binding [Profiles_SelectHint], Source={x:Static services:Loc.Instance}}"/>
+
+                                    <Grid>
+                                        <Grid.ColumnDefinitions>
+                                            <ColumnDefinition Width="150"/>
+                                            <ColumnDefinition Width="*"/>
+                                            <ColumnDefinition Width="Auto"/>
+                                        </Grid.ColumnDefinitions>
+                                        <Grid.RowDefinitions>
+                                            <RowDefinition Height="Auto"/>
+                                            <RowDefinition Height="Auto"/>
+                                            <RowDefinition Height="Auto"/>
+                                            <RowDefinition Height="Auto"/>
+                                        </Grid.RowDefinitions>
+
+                                        <TextBlock Grid.Row="0" Grid.Column="0" Style="{StaticResource FieldLabel}"
+                                                   Text="{Binding [Profiles_Name], Source={x:Static services:Loc.Instance}}"/>
+                                        <TextBox x:Name="TxtProfileName" Grid.Row="0" Grid.Column="1" Grid.ColumnSpan="2"
+                                                 Margin="0,3,0,3" TextChanged="OnProfileTextChanged"/>
+
+                                        <TextBlock Grid.Row="1" Grid.Column="0" Style="{StaticResource FieldLabel}"
+                                                   Text="{Binding [Profiles_Icon], Source={x:Static services:Loc.Instance}}"/>
+                                        <TextBox x:Name="TxtProfileIcon" Grid.Row="1" Grid.Column="1" Width="72"
+                                                 HorizontalAlignment="Left" Margin="0,3,8,3"
+                                                 FontSize="16" HorizontalContentAlignment="Center"
+                                                 TextChanged="OnProfileTextChanged"/>
+                                        <Button Grid.Row="1" Grid.Column="2" Margin="0,3,0,3"
+                                                Content="{Binding [Functions_PickIcon], Source={x:Static services:Loc.Instance}}"
+                                                Click="OnPickProfileIcon"/>
+
+                                        <TextBlock Grid.Row="2" Grid.Column="0" VerticalAlignment="Top" Margin="0,12,10,0"
+                                                   Style="{StaticResource FieldLabel}"
+                                                   Text="{Binding [Profiles_Processes], Source={x:Static services:Loc.Instance}}"/>
+                                        <TextBox x:Name="TxtProfileProcesses" Grid.Row="2" Grid.Column="1" Grid.ColumnSpan="2"
+                                                 Margin="0,8,0,8" AcceptsReturn="True" MinHeight="92"
+                                                 FontFamily="{StaticResource MonoFontFamily}" FontSize="12.5"
+                                                 VerticalScrollBarVisibility="Auto"
+                                                 TextChanged="OnProfileTextChanged"/>
+
+                                        <TextBlock Grid.Row="3" Grid.Column="0" VerticalAlignment="Top" Margin="0,12,10,0"
+                                                   Style="{StaticResource FieldLabel}"
+                                                   Text="{Binding [Profiles_Titles], Source={x:Static services:Loc.Instance}}"/>
+                                        <TextBox x:Name="TxtProfileTitles" Grid.Row="3" Grid.Column="1" Grid.ColumnSpan="2"
+                                                 Margin="0,8,0,0" AcceptsReturn="True" MinHeight="62"
+                                                 FontFamily="{StaticResource MonoFontFamily}" FontSize="12.5"
+                                                 VerticalScrollBarVisibility="Auto"
+                                                 TextChanged="OnProfileTextChanged"/>
+                                    </Grid>
+
+                                    <StackPanel Orientation="Horizontal" Margin="0,14,0,0">
+                                        <CheckBox x:Name="CbProfileEnabled" Margin="0,4,28,4"
+                                                  Content="{Binding [Profiles_Enabled], Source={x:Static services:Loc.Instance}}"
+                                                  Checked="OnProfileFlagChanged" Unchecked="OnProfileFlagChanged"/>
+                                        <CheckBox x:Name="CbProfileUseGlobal" Margin="0,4,0,4"
+                                                  Content="{Binding [Profiles_UseGlobal], Source={x:Static services:Loc.Instance}}"
+                                                  Checked="OnProfileFlagChanged" Unchecked="OnProfileFlagChanged"/>
+                                    </StackPanel>
+
+                                    <StackPanel Orientation="Horizontal" Margin="0,12,0,0">
+                                        <TextBlock Style="{StaticResource FieldLabel}"
+                                                   Text="{Binding [Profiles_ItemCount], Source={x:Static services:Loc.Instance}}"/>
+                                        <ComboBox x:Name="CmbProfileItemCount" Width="180" SelectedIndex="0"
+                                                  SelectionChanged="OnProfileItemCountChanged">
+                                            <ComboBoxItem Content="{Binding [Profiles_FollowGlobal], Source={x:Static services:Loc.Instance}}"/>
+                                            <ComboBoxItem Tag="4" Content="{Binding [Appearance_Dir4], Source={x:Static services:Loc.Instance}}"/>
+                                            <ComboBoxItem Tag="8" Content="{Binding [Appearance_Dir8], Source={x:Static services:Loc.Instance}}"/>
+                                        </ComboBox>
+                                    </StackPanel>
+
+                                    <TextBlock Margin="0,16,0,0" Style="{StaticResource HintText}"
+                                               Text="{Binding [Profiles_Items], Source={x:Static services:Loc.Instance}}"/>
+                                    <TextBlock Margin="0,4,0,0" Style="{StaticResource HintText}"
+                                               Text="{Binding [Functions_SelectHint], Source={x:Static services:Loc.Instance}}"/>
+                                </StackPanel>
+                            </ScrollViewer>
+                        </Border>
+                    </Grid>
+                </Grid>
+
+                <!-- ============ 外观 ============ -->
+                <Grid x:Name="PageAppearance" Visibility="Collapsed">
+                    <Grid.RowDefinitions>
+                        <RowDefinition Height="Auto"/>
+                        <RowDefinition Height="*"/>
+                    </Grid.RowDefinitions>
+
+                    <StackPanel Grid.Row="0" Orientation="Horizontal" Margin="0,0,0,16">
+                        <Border Style="{StaticResource PageChipBorder}"
+                                Background="{StaticResource ChipPurpleSoftBrush}">
+                            <TextBlock Text="🎨" FontSize="19"
+                                       HorizontalAlignment="Center" VerticalAlignment="Center"/>
+                        </Border>
+                        <StackPanel Margin="14,0,0,0" VerticalAlignment="Center">
+                            <TextBlock Style="{StaticResource PageTitleText}"
+                                       Text="{Binding [Tab_Appearance], Source={x:Static services:Loc.Instance}}"/>
+                            <TextBlock Style="{StaticResource PageSubtitleText}"
+                                       Text="{Binding [Appearance_Subtitle], Source={x:Static services:Loc.Instance}}"/>
+                        </StackPanel>
+                    </StackPanel>
+
+                    <Grid Grid.Row="1">
+                        <Grid.ColumnDefinitions>
+                            <ColumnDefinition Width="*"/>
+                            <ColumnDefinition Width="420"/>
+                        </Grid.ColumnDefinitions>
+
+                        <ScrollViewer Grid.Column="0" VerticalScrollBarVisibility="Auto" Margin="0,0,14,0">
+                            <StackPanel>
+                                <GroupBox Header="{Binding [Appearance_Direction], Source={x:Static services:Loc.Instance}}">
+                                    <StackPanel Orientation="Horizontal">
+                                        <RadioButton x:Name="RbDir4" GroupName="Dir" Checked="OnDirectionChanged"
+                                                     Content="{Binding [Appearance_Dir4], Source={x:Static services:Loc.Instance}}"/>
+                                        <RadioButton x:Name="RbDir8" GroupName="Dir" Checked="OnDirectionChanged"
+                                                     Content="{Binding [Appearance_Dir8], Source={x:Static services:Loc.Instance}}"/>
+                                    </StackPanel>
+                                </GroupBox>
+
+                                <GroupBox Header="{Binding [Appearance_Colors], Source={x:Static services:Loc.Instance}}">
+                                    <Grid>
+                                        <Grid.ColumnDefinitions>
+                                            <ColumnDefinition Width="160"/>
+                                            <ColumnDefinition Width="Auto"/>
+                                            <ColumnDefinition Width="126"/>
+                                            <ColumnDefinition Width="*"/>
+                                        </Grid.ColumnDefinitions>
+                                        <Grid.RowDefinitions>
+                                            <RowDefinition Height="38"/>
+                                            <RowDefinition Height="38"/>
+                                            <RowDefinition Height="38"/>
+                                            <RowDefinition Height="38"/>
+                                            <RowDefinition Height="38"/>
+                                            <RowDefinition Height="Auto"/>
+                                        </Grid.RowDefinitions>
+
+                                        <TextBlock Grid.Row="0" Grid.Column="0" Style="{StaticResource FieldLabel}"
+                                                   Text="{Binding [Appearance_Background], Source={x:Static services:Loc.Instance}}"/>
+                                        <Border x:Name="SwatchBg" Grid.Row="0" Grid.Column="1" Style="{StaticResource ColorSwatch}"
+                                                MouseLeftButtonUp="OnSwatchClick" Tag="TxtBg"/>
+                                        <TextBox x:Name="TxtBg" Grid.Row="0" Grid.Column="2" Margin="10,4"
+                                                 FontFamily="{StaticResource MonoFontFamily}" FontSize="12.5"
+                                                 TextChanged="OnColorTextChanged"/>
+                                        <Button Grid.Row="0" Grid.Column="3" Margin="10,4,0,4" HorizontalAlignment="Left"
+                                                Tag="TxtBg" Content="{Binding [Appearance_Pick], Source={x:Static services:Loc.Instance}}"
+                                                Click="OnPickColor"/>
+
+                                        <TextBlock Grid.Row="1" Grid.Column="0" Style="{StaticResource FieldLabel}"
+                                                   Text="{Binding [Appearance_Border], Source={x:Static services:Loc.Instance}}"/>
+                                        <Border x:Name="SwatchBorder" Grid.Row="1" Grid.Column="1" Style="{StaticResource ColorSwatch}"
+                                                MouseLeftButtonUp="OnSwatchClick" Tag="TxtBorder"/>
+                                        <TextBox x:Name="TxtBorder" Grid.Row="1" Grid.Column="2" Margin="10,4"
+                                                 FontFamily="{StaticResource MonoFontFamily}" FontSize="12.5"
+                                                 TextChanged="OnColorTextChanged"/>
+                                        <Button Grid.Row="1" Grid.Column="3" Margin="10,4,0,4" HorizontalAlignment="Left"
+                                                Tag="TxtBorder" Content="{Binding [Appearance_Pick], Source={x:Static services:Loc.Instance}}"
+                                                Click="OnPickColor"/>
+
+                                        <TextBlock Grid.Row="2" Grid.Column="0" Style="{StaticResource FieldLabel}"
+                                                   Text="{Binding [Appearance_Item], Source={x:Static services:Loc.Instance}}"/>
+                                        <Border x:Name="SwatchItem" Grid.Row="2" Grid.Column="1" Style="{StaticResource ColorSwatch}"
+                                                MouseLeftButtonUp="OnSwatchClick" Tag="TxtItem"/>
+                                        <TextBox x:Name="TxtItem" Grid.Row="2" Grid.Column="2" Margin="10,4"
+                                                 FontFamily="{StaticResource MonoFontFamily}" FontSize="12.5"
+                                                 TextChanged="OnColorTextChanged"/>
+                                        <Button Grid.Row="2" Grid.Column="3" Margin="10,4,0,4" HorizontalAlignment="Left"
+                                                Tag="TxtItem" Content="{Binding [Appearance_Pick], Source={x:Static services:Loc.Instance}}"
+                                                Click="OnPickColor"/>
+
+                                        <TextBlock Grid.Row="3" Grid.Column="0" Style="{StaticResource FieldLabel}"
+                                                   Text="{Binding [Appearance_ItemSelected], Source={x:Static services:Loc.Instance}}"/>
+                                        <Border x:Name="SwatchSel" Grid.Row="3" Grid.Column="1" Style="{StaticResource ColorSwatch}"
+                                                MouseLeftButtonUp="OnSwatchClick" Tag="TxtSel"/>
+                                        <TextBox x:Name="TxtSel" Grid.Row="3" Grid.Column="2" Margin="10,4"
+                                                 FontFamily="{StaticResource MonoFontFamily}" FontSize="12.5"
+                                                 TextChanged="OnColorTextChanged"/>
+                                        <Button Grid.Row="3" Grid.Column="3" Margin="10,4,0,4" HorizontalAlignment="Left"
+                                                Tag="TxtSel" Content="{Binding [Appearance_Pick], Source={x:Static services:Loc.Instance}}"
+                                                Click="OnPickColor"/>
+
+                                        <TextBlock Grid.Row="4" Grid.Column="0" Style="{StaticResource FieldLabel}"
+                                                   Text="{Binding [Appearance_Text], Source={x:Static services:Loc.Instance}}"/>
+                                        <Border x:Name="SwatchText" Grid.Row="4" Grid.Column="1" Style="{StaticResource ColorSwatch}"
+                                                MouseLeftButtonUp="OnSwatchClick" Tag="TxtText"/>
+                                        <TextBox x:Name="TxtText" Grid.Row="4" Grid.Column="2" Margin="10,4"
+                                                 FontFamily="{StaticResource MonoFontFamily}" FontSize="12.5"
+                                                 TextChanged="OnColorTextChanged"/>
+                                        <Button Grid.Row="4" Grid.Column="3" Margin="10,4,0,4" HorizontalAlignment="Left"
+                                                Tag="TxtText" Content="{Binding [Appearance_Pick], Source={x:Static services:Loc.Instance}}"
+                                                Click="OnPickColor"/>
+
+                                        <Button Grid.Row="5" Grid.Column="0" Grid.ColumnSpan="2" Margin="0,10,10,0"
+                                                HorizontalAlignment="Left"
+                                                Content="{Binding [Appearance_ResetColors], Source={x:Static services:Loc.Instance}}"
+                                                Click="OnResetColors"/>
+                                    </Grid>
+                                </GroupBox>
+
+                                <GroupBox Header="{Binding [Appearance_Preview], Source={x:Static services:Loc.Instance}}">
+                                    <Grid>
+                                        <Grid.ColumnDefinitions>
+                                            <ColumnDefinition Width="190"/>
+                                            <ColumnDefinition Width="*"/>
+                                            <ColumnDefinition Width="70"/>
+                                        </Grid.ColumnDefinitions>
+                                        <Grid.RowDefinitions>
+                                            <RowDefinition Height="38"/>
+                                            <RowDefinition Height="38"/>
+                                            <RowDefinition Height="38"/>
+                                            <RowDefinition Height="38"/>
+                                        </Grid.RowDefinitions>
+
+                                        <TextBlock Grid.Row="0" Grid.Column="0" Style="{StaticResource FieldLabel}"
+                                                   Text="{Binding [Appearance_Scale], Source={x:Static services:Loc.Instance}}"/>
+                                        <Slider x:Name="SldScale" Grid.Row="0" Grid.Column="1" Minimum="0.6" Maximum="1.6"
+                                                TickFrequency="0.05" IsSnapToTickEnabled="True"
+                                                ValueChanged="OnAppearanceSliderChanged"/>
+                                        <TextBlock x:Name="TxtScaleValue" Grid.Row="0" Grid.Column="2"
+                                                   VerticalAlignment="Center" TextAlignment="Right"
+                                                   Foreground="{StaticResource TextSecondaryBrush}" FontSize="12.5"/>
+
+                                        <TextBlock Grid.Row="1" Grid.Column="0" Style="{StaticResource FieldLabel}"
+                                                   Text="{Binding [Appearance_ItemSize], Source={x:Static services:Loc.Instance}}"/>
+                                        <Slider x:Name="SldItemSize" Grid.Row="1" Grid.Column="1" Minimum="44" Maximum="120"
+                                                TickFrequency="2" IsSnapToTickEnabled="True"
+                                                ValueChanged="OnAppearanceSliderChanged"/>
+                                        <TextBlock x:Name="TxtItemSizeValue" Grid.Row="1" Grid.Column="2"
+                                                   VerticalAlignment="Center" TextAlignment="Right"
+                                                   Foreground="{StaticResource TextSecondaryBrush}" FontSize="12.5"/>
+
+                                        <TextBlock Grid.Row="2" Grid.Column="0" Style="{StaticResource FieldLabel}"
+                                                   Text="{Binding [Appearance_DeadZone], Source={x:Static services:Loc.Instance}}"/>
+                                        <Slider x:Name="SldDeadZone" Grid.Row="2" Grid.Column="1" Minimum="0" Maximum="120"
+                                                TickFrequency="2" IsSnapToTickEnabled="True"
+                                                ValueChanged="OnAppearanceSliderChanged"/>
+                                        <TextBlock x:Name="TxtDeadZoneValue" Grid.Row="2" Grid.Column="2"
+                                                   VerticalAlignment="Center" TextAlignment="Right"
+                                                   Foreground="{StaticResource TextSecondaryBrush}" FontSize="12.5"/>
+
+                                        <TextBlock Grid.Row="3" Grid.Column="0" Style="{StaticResource FieldLabel}"
+                                                   Text="{Binding [Appearance_Opacity], Source={x:Static services:Loc.Instance}}"/>
+                                        <Slider x:Name="SldOpacity" Grid.Row="3" Grid.Column="1" Minimum="0.3" Maximum="1.0"
+                                                TickFrequency="0.05" IsSnapToTickEnabled="True"
+                                                ValueChanged="OnAppearanceSliderChanged"/>
+                                        <TextBlock x:Name="TxtOpacityValue" Grid.Row="3" Grid.Column="2"
+                                                   VerticalAlignment="Center" TextAlignment="Right"
+                                                   Foreground="{StaticResource TextSecondaryBrush}" FontSize="12.5"/>
+                                    </Grid>
+                                </GroupBox>
+
+                                <GroupBox Header="{Binding [Appearance_Options], Source={x:Static services:Loc.Instance}}">
+                                    <StackPanel>
+                                        <CheckBox x:Name="CbGlow"
+                                                  Content="{Binding [Appearance_Glow], Source={x:Static services:Loc.Instance}}"
+                                                  Checked="OnAppearanceFlagChanged" Unchecked="OnAppearanceFlagChanged"/>
+                                        <CheckBox x:Name="CbAnimation"
+                                                  Content="{Binding [Appearance_Animation], Source={x:Static services:Loc.Instance}}"
+                                                  Checked="OnAppearanceFlagChanged" Unchecked="OnAppearanceFlagChanged"/>
+                                        <CheckBox x:Name="CbExecuteOnRelease"
+                                                  Content="{Binding [Appearance_ExecuteOnRelease], Source={x:Static services:Loc.Instance}}"
+                                                  Checked="OnAppearanceFlagChanged" Unchecked="OnAppearanceFlagChanged"/>
+                                    </StackPanel>
+                                </GroupBox>
+                            </StackPanel>
+                        </ScrollViewer>
+
+                        <Border Grid.Column="1" Style="{StaticResource CardBorder}" Padding="10">
+                            <views:WheelPreview x:Name="Preview"/>
+                        </Border>
+                    </Grid>
+                </Grid>
+
+                <!-- ============ 功能选择 ============ -->
+                <Grid x:Name="PageFunctions" Visibility="Collapsed">
+                    <Grid.RowDefinitions>
+                        <RowDefinition Height="Auto"/>
+                        <RowDefinition Height="Auto"/>
+                        <RowDefinition Height="*"/>
+                    </Grid.RowDefinitions>
+
+                    <StackPanel Grid.Row="0" Orientation="Horizontal" Margin="0,0,0,16">
+                        <Border Style="{StaticResource PageChipBorder}"
+                                Background="{StaticResource ChipOrangeSoftBrush}">
+                            <TextBlock Text="🧰" FontSize="19"
+                                       HorizontalAlignment="Center" VerticalAlignment="Center"/>
+                        </Border>
+                        <StackPanel Margin="14,0,0,0" VerticalAlignment="Center">
+                            <TextBlock Style="{StaticResource PageTitleText}"
+                                       Text="{Binding [Tab_Functions], Source={x:Static services:Loc.Instance}}"/>
+                            <TextBlock Style="{StaticResource PageSubtitleText}"
+                                       Text="{Binding [Functions_Subtitle], Source={x:Static services:Loc.Instance}}"/>
+                        </StackPanel>
+                    </StackPanel>
+
+                    <StackPanel Grid.Row="1" Orientation="Horizontal" Margin="0,0,0,12">
+                        <TextBlock Style="{StaticResource FieldLabel}"
+                                   Text="{Binding [Profiles_List], Source={x:Static services:Loc.Instance}}"/>
+                        <ComboBox x:Name="CmbTarget" Width="250" SelectionChanged="OnTargetChanged"/>
+                        <TextBlock x:Name="TxtTargetNote" Margin="12,0,0,0" VerticalAlignment="Center"
+                                   Style="{StaticResource HintText}"/>
+                    </StackPanel>
+
+                    <Grid Grid.Row="2">
+                        <Grid.ColumnDefinitions>
+                            <ColumnDefinition Width="272"/>
+                            <ColumnDefinition Width="*"/>
+                        </Grid.ColumnDefinitions>
+
+                        <Border Grid.Column="0" Style="{StaticResource CardBorder}" Margin="0,0,14,0">
+                            <DockPanel>
+                                <TextBlock DockPanel.Dock="Top" Margin="0,0,0,8" FontWeight="SemiBold" FontSize="13"
+                                           Text="{Binding [Functions_Slots], Source={x:Static services:Loc.Instance}}"/>
+                                <ListBox x:Name="LstSlots" SelectionChanged="OnSlotSelected"/>
+                            </DockPanel>
+                        </Border>
+
+                        <Border Grid.Column="1" Style="{StaticResource CardBorder}">
+                            <ScrollViewer VerticalScrollBarVisibility="Auto">
+                                <StackPanel x:Name="SlotEditor">
+                                    <TextBlock Style="{StaticResource HintText}" Margin="0,0,0,12"
+                                               Text="{Binding [Functions_SelectHint], Source={x:Static services:Loc.Instance}}"/>
+
+                                    <Grid>
+                                        <Grid.ColumnDefinitions>
+                                            <ColumnDefinition Width="150"/>
+                                            <ColumnDefinition Width="*"/>
+                                            <ColumnDefinition Width="Auto"/>
+                                        </Grid.ColumnDefinitions>
+                                        <Grid.RowDefinitions>
+                                            <RowDefinition Height="Auto"/>
+                                            <RowDefinition Height="Auto"/>
+                                            <RowDefinition Height="Auto"/>
+                                            <RowDefinition Height="Auto"/>
+                                            <RowDefinition Height="Auto"/>
+                                            <RowDefinition Height="Auto"/>
+                                            <RowDefinition Height="Auto"/>
+                                        </Grid.RowDefinitions>
+
+                                        <TextBlock Grid.Row="0" Grid.Column="0" Style="{StaticResource FieldLabel}"
+                                                   Text="{Binding [Functions_Name], Source={x:Static services:Loc.Instance}}"/>
+                                        <TextBox x:Name="TxtName" Grid.Row="0" Grid.Column="1" Grid.ColumnSpan="2"
+                                                 Margin="0,3,0,3" TextChanged="OnSlotTextChanged"/>
+
+                                        <TextBlock Grid.Row="1" Grid.Column="0" Style="{StaticResource FieldLabel}"
+                                                   Text="{Binding [Functions_Icon], Source={x:Static services:Loc.Instance}}"/>
+                                        <StackPanel Grid.Row="1" Grid.Column="1" Grid.ColumnSpan="2" Orientation="Horizontal">
+                                            <TextBox x:Name="TxtIcon" Width="72" Margin="0,3,8,3"
+                                                     FontSize="16" HorizontalContentAlignment="Center"
+                                                     TextChanged="OnSlotTextChanged"/>
+                                            <Button Margin="0,3,10,3"
+                                                    Content="{Binding [Functions_PickIcon], Source={x:Static services:Loc.Instance}}"
+                                                    Click="OnPickIcon"/>
+                                            <TextBlock x:Name="TxtIconMode" VerticalAlignment="Center"
+                                                       Style="{StaticResource HintText}"/>
+                                        </StackPanel>
+
+                                        <TextBlock Grid.Row="2" Grid.Column="0" Style="{StaticResource FieldLabel}"
+                                                   Text="{Binding [Functions_ActionType], Source={x:Static services:Loc.Instance}}"/>
+                                        <ComboBox x:Name="CmbType" Grid.Row="2" Grid.Column="1" Margin="0,3,8,3"
+                                                  SelectionChanged="OnActionTypeChanged"/>
+
+                                        <TextBlock x:Name="LblValue" Grid.Row="3" Grid.Column="0"
+                                                   Style="{StaticResource FieldLabel}"/>
+                                        <StackPanel Grid.Row="3" Grid.Column="1" Grid.ColumnSpan="2" Margin="0,3,0,0">
+                                            <!-- 用 WrapPanel：窗口窄的时候按钮自动换行，不会被裁掉 -->
+                                            <WrapPanel>
+                                                <ComboBox x:Name="CmbBuiltin" Width="340" Margin="0,0,8,6" Visibility="Collapsed"
+                                                          SelectionChanged="OnBuiltinChanged"/>
+                                                <TextBox x:Name="TxtValue" Width="340" Margin="0,0,8,6"
+                                                         FontFamily="{StaticResource MonoFontFamily}" FontSize="12.5"
+                                                         TextChanged="OnSlotTextChanged"/>
+                                                <Button x:Name="BtnBrowse" Margin="0,0,8,6"
+                                                        Content="{Binding [Common_Browse], Source={x:Static services:Loc.Instance}}"
+                                                        Click="OnBrowseValue"/>
+                                                <Button x:Name="BtnShortcut" Margin="0,0,8,6"
+                                                        Content="{Binding [Functions_PickShortcut], Source={x:Static services:Loc.Instance}}"
+                                                        Click="OnPickShortcut"/>
+                                            </WrapPanel>
+                                            <TextBlock x:Name="TxtValueNote" Style="{StaticResource HintText}"/>
+                                        </StackPanel>
+
+                                        <TextBlock Grid.Row="4" Grid.Column="0" Style="{StaticResource FieldLabel}"
+                                                   Text="{Binding [Functions_Arguments], Source={x:Static services:Loc.Instance}}"/>
+                                        <TextBox x:Name="TxtArgs" Grid.Row="4" Grid.Column="1" Grid.ColumnSpan="2"
+                                                 Margin="0,3,0,3" FontFamily="{StaticResource MonoFontFamily}" FontSize="12.5"
+                                                 TextChanged="OnSlotTextChanged"/>
+
+                                        <TextBlock Grid.Row="5" Grid.Column="0" Style="{StaticResource FieldLabel}"
+                                                   Text="{Binding [Functions_WorkingDir], Source={x:Static services:Loc.Instance}}"/>
+                                        <WrapPanel Grid.Row="5" Grid.Column="1" Grid.ColumnSpan="2" Margin="0,3,0,0">
+                                            <TextBox x:Name="TxtWorkDir" Width="340" Margin="0,0,8,0"
+                                                     FontFamily="{StaticResource MonoFontFamily}" FontSize="12.5"
+                                                     TextChanged="OnSlotTextChanged"/>
+                                            <Button Margin="0,0,8,0"
+                                                    Content="{Binding [Common_Browse], Source={x:Static services:Loc.Instance}}"
+                                                    Click="OnBrowseWorkDir"/>
+                                        </WrapPanel>
+
+                                        <StackPanel Grid.Row="6" Grid.Column="0" Grid.ColumnSpan="3" Margin="0,10,0,0">
+                                            <StackPanel Orientation="Horizontal">
+                                                <CheckBox x:Name="CbRunAsAdmin" Margin="0,4,28,4"
+                                                          Content="{Binding [Functions_RunAsAdmin], Source={x:Static services:Loc.Instance}}"
+                                                          Checked="OnSlotFlagChanged" Unchecked="OnSlotFlagChanged"/>
+                                                <CheckBox x:Name="CbHidden" Margin="0,4,0,4"
+                                                          Content="{Binding [Functions_Hidden], Source={x:Static services:Loc.Instance}}"
+                                                          Checked="OnSlotFlagChanged" Unchecked="OnSlotFlagChanged"/>
+                                            </StackPanel>
+
+                                            <StackPanel Orientation="Horizontal" Margin="0,12,0,0">
+                                                <Button Style="{StaticResource MiniButton}"
+                                                        Content="{Binding [Functions_TestRun], Source={x:Static services:Loc.Instance}}"
+                                                        Click="OnTestSlot"/>
+                                                <Button Style="{StaticResource MiniButton}"
+                                                        Content="{Binding [Functions_Clear], Source={x:Static services:Loc.Instance}}"
+                                                        Click="OnClearSlot"/>
+                                            </StackPanel>
+                                        </StackPanel>
+                                    </Grid>
+                                </StackPanel>
+                            </ScrollViewer>
+                        </Border>
+                    </Grid>
+                </Grid>
+
+                <!-- ============ 系统设置 ============ -->
+                <Grid x:Name="PageSystem" Visibility="Collapsed">
+                    <ScrollViewer VerticalScrollBarVisibility="Auto">
+                        <StackPanel>
+                            <StackPanel Orientation="Horizontal" Margin="0,0,0,16">
+                                <Border Style="{StaticResource PageChipBorder}"
+                                        Background="{StaticResource ChipTealSoftBrush}">
+                                    <TextBlock Text="⚙" FontSize="19"
+                                               HorizontalAlignment="Center" VerticalAlignment="Center"/>
+                                </Border>
+                                <StackPanel Margin="14,0,0,0" VerticalAlignment="Center">
+                                    <TextBlock Style="{StaticResource PageTitleText}"
+                                               Text="{Binding [Tab_System], Source={x:Static services:Loc.Instance}}"/>
+                                    <TextBlock Style="{StaticResource PageSubtitleText}"
+                                               Text="{Binding [System_Subtitle], Source={x:Static services:Loc.Instance}}"/>
+                                </StackPanel>
+                            </StackPanel>
+
+                            <GroupBox Header="{Binding [System_Language], Source={x:Static services:Loc.Instance}}">
+                                <StackPanel>
+                                    <ComboBox x:Name="CmbLanguage" Width="260" HorizontalAlignment="Left"
+                                              SelectionChanged="OnLanguageChanged">
+                                        <ComboBoxItem Content="中文（简体）" Tag="zh-CN"/>
+                                        <ComboBoxItem Content="English" Tag="en-US"/>
+                                    </ComboBox>
+                                    <TextBlock Margin="0,8,0,0" Style="{StaticResource HintText}"
+                                               Text="{Binding [System_LanguageHint], Source={x:Static services:Loc.Instance}}"/>
+                                </StackPanel>
+                            </GroupBox>
+
+                            <GroupBox Header="{Binding [System_Font], Source={x:Static services:Loc.Instance}}">
+                                <StackPanel>
+                                    <StackPanel Orientation="Horizontal">
+                                        <ComboBox x:Name="CmbUiFont" Width="360" HorizontalAlignment="Left"
+                                                  SelectionChanged="OnUiFontChanged"/>
+                                        <Button Margin="10,0,0,0" Style="{StaticResource MiniButton}"
+                                                Content="{Binding [System_FontReload], Source={x:Static services:Loc.Instance}}"
+                                                Click="OnReloadFonts"/>
+                                    </StackPanel>
+
+                                    <Border Style="{StaticResource InsetCardBorder}" Margin="0,12,0,0">
+                                        <StackPanel>
+                                            <TextBlock x:Name="TxtFontPreview"
+                                                       Text="轮盘启动器 Radial Launcher · 0123456789"
+                                                       FontSize="19"
+                                                       Foreground="{StaticResource TextPrimaryBrush}"/>
+                                            <TextBlock x:Name="TxtFontNote" Margin="0,6,0,0"
+                                                       Style="{StaticResource HintText}"/>
+                                        </StackPanel>
+                                    </Border>
+
+                                    <TextBlock Margin="0,8,0,0" Style="{StaticResource HintText}"
+                                               Text="{Binding [System_FontHint], Source={x:Static services:Loc.Instance}}"/>
+                                </StackPanel>
+                            </GroupBox>
+
+                            <GroupBox Header="{Binding [System_StartupGroup], Source={x:Static services:Loc.Instance}}">
+                                <StackPanel>
+                                    <CheckBox x:Name="CbAutoStart"
+                                              Content="{Binding [System_AutoStart], Source={x:Static services:Loc.Instance}}"/>
+                                    <TextBlock Margin="50,0,0,6" Style="{StaticResource HintText}"
+                                               Text="{Binding [System_AutoStartHint], Source={x:Static services:Loc.Instance}}"/>
+
+                                    <CheckBox x:Name="CbSystemRunAsAdmin"
+                                              Content="{Binding [System_RunAsAdmin], Source={x:Static services:Loc.Instance}}"/>
+                                    <TextBlock x:Name="TxtAdminNote" Margin="50,0,0,6" Style="{StaticResource HintText}"/>
+
+                                    <CheckBox x:Name="CbShowTrayTip"
+                                              Content="{Binding [System_TrayTip], Source={x:Static services:Loc.Instance}}"/>
+                                </StackPanel>
+                            </GroupBox>
+
+                            <GroupBox Header="{Binding [System_GitHub], Source={x:Static services:Loc.Instance}}">
+                                <StackPanel>
+                                    <TextBox x:Name="TxtGitHub" FontFamily="{StaticResource MonoFontFamily}" FontSize="12.5"/>
+                                    <StackPanel Orientation="Horizontal" Margin="0,12,0,0">
+                                        <Button Style="{StaticResource MiniButton}"
+                                                Content="{Binding [System_OpenGitHub], Source={x:Static services:Loc.Instance}}"
+                                                Click="OnOpenGitHub"/>
+                                        <Button Style="{StaticResource MiniButton}"
+                                                Content="{Binding [System_DataFolder], Source={x:Static services:Loc.Instance}}"
+                                                Click="OnOpenDataFolder"/>
+                                        <Button Style="{StaticResource MiniButton}"
+                                                Content="{Binding [System_Reset], Source={x:Static services:Loc.Instance}}"
+                                                Click="OnFactoryReset"/>
+                                    </StackPanel>
+                                </StackPanel>
+                            </GroupBox>
+                        </StackPanel>
+                    </ScrollViewer>
+                </Grid>
+
+                <!-- ============ 关于 ============ -->
+                <Grid x:Name="PageAbout" Visibility="Collapsed">
+                    <Grid.RowDefinitions>
+                        <RowDefinition Height="Auto"/>
+                        <RowDefinition Height="*"/>
+                    </Grid.RowDefinitions>
+
+                    <StackPanel Grid.Row="0" Orientation="Horizontal" Margin="0,0,0,16">
+                        <Border Style="{StaticResource PageChipBorder}"
+                                Background="{StaticResource ChipGreySoftBrush}">
+                            <TextBlock Text="ℹ" FontSize="19"
+                                       HorizontalAlignment="Center" VerticalAlignment="Center"/>
+                        </Border>
+                        <StackPanel Margin="14,0,0,0" VerticalAlignment="Center">
+                            <TextBlock x:Name="TxtVersion" Style="{StaticResource PageTitleText}"/>
+                            <TextBlock Style="{StaticResource PageSubtitleText}"
+                                       Text="{Binding [About_Description], Source={x:Static services:Loc.Instance}}"/>
+                        </StackPanel>
+                    </StackPanel>
+
+                    <Border Grid.Row="1" Style="{StaticResource CardBorder}" Padding="14">
+                        <DockPanel>
+                            <StackPanel DockPanel.Dock="Top" Orientation="Horizontal" Margin="0,0,0,10">
+                                <TextBlock Style="{StaticResource FieldLabel}" FontWeight="SemiBold"
+                                           Text="{Binding [About_Log], Source={x:Static services:Loc.Instance}}"/>
+                                <Button Style="{StaticResource MiniButton}"
+                                        Content="{Binding [About_RefreshLog], Source={x:Static services:Loc.Instance}}"
+                                        Click="OnRefreshLog"/>
+                                <Button Style="{StaticResource MiniButton}"
+                                        Content="{Binding [About_OpenLog], Source={x:Static services:Loc.Instance}}"
+                                        Click="OnOpenLogFile"/>
+                                <Button Style="{StaticResource MiniButton}"
+                                        Content="{Binding [About_ClearLog], Source={x:Static services:Loc.Instance}}"
+                                        Click="OnClearLog"/>
+                            </StackPanel>
+
+                            <Border Style="{StaticResource InsetCardBorder}" Padding="10">
+                                <TextBox x:Name="TxtLog" IsReadOnly="True" BorderThickness="0"
+                                         Background="Transparent" MinHeight="200"
+                                         FontFamily="{StaticResource MonoFontFamily}" FontSize="11.5"
+                                         TextWrapping="NoWrap" AcceptsReturn="True"
+                                         VerticalScrollBarVisibility="Auto"
+                                         HorizontalScrollBarVisibility="Auto"/>
+                            </Border>
+                        </DockPanel>
+                    </Border>
+                </Grid>
+            </Grid>
+        </Grid>
+
+        <!-- ==================== 底部操作栏 ==================== -->
+        <Border Grid.Row="2" Margin="12,10,12,12" Padding="14,10"
+                Background="{StaticResource CardBackgroundBrush}"
+                BorderBrush="{StaticResource CardBorderBrush}" BorderThickness="1"
+                CornerRadius="8">
+            <Grid>
+                <TextBlock x:Name="TxtSaveHint" VerticalAlignment="Center"
+                           Style="{StaticResource HintText}"
+                           Text="{Binding [System_SaveHint], Source={x:Static services:Loc.Instance}}"/>
+                <StackPanel Orientation="Horizontal" HorizontalAlignment="Right">
+                    <Button Style="{StaticResource AccentButton}" Margin="0,0,10,0"
+                            Content="{Binding [Common_SaveClose], Source={x:Static services:Loc.Instance}}"
+                            Click="OnSaveAndClose"/>
+                    <Button MinWidth="96"
+                            Content="{Binding [Common_Cancel], Source={x:Static services:Loc.Instance}}"
+                            Click="OnCancel"/>
+                </StackPanel>
+            </Grid>
+        </Border>
+    </Grid>
+</Window>
