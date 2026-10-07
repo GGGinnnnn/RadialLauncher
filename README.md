@@ -4,7 +4,8 @@
 
 Windows 10 / 11 · .NET 8 · WPF · 免安装
 
-![设置面板](docs/panel.png)
+[![最新版本](https://img.shields.io/github/v/release/GGGinnnnn/RadialLauncher?label=Release&color=0067C0)](../../releases)
+[![下载量](https://img.shields.io/github/downloads/GGGinnnnn/RadialLauncher/total?label=Downloads&color=0067C0)](../../releases)
 
 ---
 
