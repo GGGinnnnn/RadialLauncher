@@ -309,6 +309,15 @@ namespace RadialLauncher.Services
         [DllImport("user32.dll")]
         public static extern IntPtr MonitorFromWindow(IntPtr hwnd, uint dwFlags);
 
+        /// <summary>
+        /// 窗口当前是否处于“最大化”状态（等价于有 WS_MAXIMIZE）。
+        /// 全屏判定要用它把最大化摘出去：任务栏自动隐藏时工作区与显示器区域重合，
+        /// 而最大化窗口会向外溢出版面约 7px，光比矩形会把它当成全屏。
+        /// </summary>
+        [DllImport("user32.dll")]
+        [return: MarshalAs(UnmanagedType.Bool)]
+        public static extern bool IsZoomed(IntPtr hWnd);
+
         [DllImport("user32.dll")]
         [return: MarshalAs(UnmanagedType.Bool)]
         public static extern bool GetWindowRect(IntPtr hWnd, out RECT lpRect);

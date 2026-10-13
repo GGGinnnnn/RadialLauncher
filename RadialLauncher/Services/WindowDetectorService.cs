@@ -129,7 +129,11 @@ namespace RadialLauncher.Services
                    && className.StartsWith("Shell_", StringComparison.OrdinalIgnoreCase);
         }
 
-        /// <summary>窗口矩形覆盖整个显示器 → 认为处于全屏（游戏 / 全屏视频）。</summary>
+        /// <summary>
+        /// 窗口矩形覆盖整个显示器、且不是“最大化”状态 → 认为处于全屏（游戏 / 全屏视频）。
+        /// 这里只负责取数（矩形 / 显示器 / 最大化状态）与异常兜底，
+        /// 判定规则本身在 <see cref="FullscreenDetection"/>，可单测。
+        /// </summary>
         private static bool CheckFullscreen(IntPtr hwnd)
         {
             try
@@ -145,10 +149,12 @@ namespace RadialLauncher.Services
                 };
                 if (!NativeMethods.GetMonitorInfoW(monitor, ref mi)) return false;
 
-                return rect.Left <= mi.rcMonitor.Left
-                       && rect.Top <= mi.rcMonitor.Top
-                       && rect.Right >= mi.rcMonitor.Right
-                       && rect.Bottom >= mi.rcMonitor.Bottom;
+                // IsZoomed 这一项是修掉“最大化被当成全屏”的关键，别删。
+                return FullscreenDetection.IsFullscreen(
+                    new ScreenRect(rect.Left, rect.Top, rect.Right, rect.Bottom),
+                    new ScreenRect(
+                        mi.rcMonitor.Left, mi.rcMonitor.Top, mi.rcMonitor.Right, mi.rcMonitor.Bottom),
+                    NativeMethods.IsZoomed(hwnd));
             }
             catch
             {
@@ -156,26 +162,55 @@ namespace RadialLauncher.Services
             }
         }
 
-        /// <summary>黑白名单判定（不含应用专属逻辑）。</summary>
+        /// <summary>
+        /// 黑白名单判定（不含应用专属逻辑）。
+        ///
+        /// <para>本方法只在“按住到达阈值、准备唤出”这一刻被调用（唯一调用方是
+        /// <c>MainWindow.CanTrigger</c>），频率等于用户按压次数，所以每个
+        /// <c>return false</c> 都带上一句原因日志是安全的，不会刷屏。</para>
+        ///
+        /// <para>这么做是因为全屏那条拦截过去完全静默 —— 日志里连一行都没有，
+        /// 只能靠真机做对照实验才反推出“是最大化窗口被误判成全屏”。</para>
+        /// </summary>
         public bool IsAllowed(AppConfig config, ForegroundWindowInfo? info = null)
         {
             info ??= GetCurrent();
 
             // 自己的窗口（设置面板等）里不唤出轮盘，避免打断输入框里的编辑
             if (string.Equals(info.ProcessName, _selfProcess, StringComparison.OrdinalIgnoreCase))
+            {
+                Logger.Debug("前台是本程序自己的窗口，拦截本次唤出");
                 return false;
+            }
 
             if (string.IsNullOrEmpty(info.ProcessName)) return true;
 
             var env = config.Environment;
 
             if (env.SkipFullscreenApps && info.IsFullscreen && !info.IsShell)
+            {
+                // 用 Info 而不是 Debug：默认日志级别就是 Info，而这条恰恰是过去
+                // “按了没反应、日志还干干净净”的元凶，必须能看见。
+                Logger.Info($"前台处于全屏，按 SkipFullscreenApps 拦截本次唤出：{info.Display}");
                 return false;
+            }
 
             if (env.UseWhitelist)
-                return ContainsIgnoreCase(env.WhitelistProcesses, info.ProcessName);
+            {
+                if (ContainsIgnoreCase(env.WhitelistProcesses, info.ProcessName)) return true;
 
-            return !ContainsIgnoreCase(env.BlacklistProcesses, info.ProcessName);
+                // 下面两条是用户自己配的策略，属于“预期内”，用 Debug 就好，免得刷屏。
+                Logger.Debug($"前台不在白名单内，拦截本次唤出：{info.ProcessName}");
+                return false;
+            }
+
+            if (ContainsIgnoreCase(env.BlacklistProcesses, info.ProcessName))
+            {
+                Logger.Debug($"前台在黑名单内，拦截本次唤出：{info.ProcessName}");
+                return false;
+            }
+
+            return true;
         }
 
         private static bool ContainsIgnoreCase(List<string> list, string value)
