@@ -25,6 +25,16 @@ namespace RadialLauncher.Services
         public const int WM_MBUTTONUP = 0x0208;
         public const int WM_MOUSEWHEEL = 0x020A;
 
+        // ---- 消息泵（钩子线程自有的 GetMessage 循环用）----
+        public const uint WM_QUIT = 0x0012;
+        public const uint WM_TIMER = 0x0113;
+
+        /// <summary>应用自定义消息从这儿起用（0x8000–0xBFFF 归应用，不会与系统消息撞车）。</summary>
+        public const uint WM_APP = 0x8000;
+
+        /// <summary>PeekMessage 的 wRemoveMsg：只为建队列/看一眼，不把消息取走。</summary>
+        public const uint PM_NOREMOVE = 0x0000;
+
         public const uint LLKHF_INJECTED = 0x00000010;
         public const uint LLMHF_INJECTED = 0x00000001;
 
@@ -178,6 +188,51 @@ namespace RadialLauncher.Services
 
         [DllImport("user32.dll")]
         public static extern IntPtr CallNextHookEx(IntPtr hhk, int nCode, IntPtr wParam, IntPtr lParam);
+
+        // ---- 消息泵：把低层钩子装到专用线程上，就必须自己跑 GetMessage 循环 ----
+
+        /// <summary>线程消息（GetMessage 取出来的那一份）。</summary>
+        [StructLayout(LayoutKind.Sequential)]
+        public struct MSG
+        {
+            public IntPtr hwnd;
+            public uint message;
+            public IntPtr wParam;
+            public IntPtr lParam;
+            public uint time;
+            public POINT pt;
+        }
+
+        /// <summary>取消息。hWnd 传 null 时同时取窗口消息与线程消息；返回 0 = WM_QUIT，-1 = 出错。</summary>
+        [DllImport("user32.dll", SetLastError = true)]
+        public static extern int GetMessageW(out MSG lpMsg, IntPtr hWnd, uint wMsgFilterMin, uint wMsgFilterMax);
+
+        /// <summary>
+        /// 看一眼消息。本程序只用它做一件事：在钩子线程一开始强制创建线程消息队列 ——
+        /// 向一个还没有消息队列的线程 PostThreadMessage 会直接失败（官方文档明示的竞态）。
+        /// </summary>
+        [DllImport("user32.dll", SetLastError = true)]
+        [return: MarshalAs(UnmanagedType.Bool)]
+        public static extern bool PeekMessageW(out MSG lpMsg, IntPtr hWnd, uint wMsgFilterMin, uint wMsgFilterMax, uint wRemoveMsg);
+
+        /// <summary>往指定线程的消息队列投一条消息（不需要窗口句柄）。</summary>
+        [DllImport("user32.dll", SetLastError = true)]
+        [return: MarshalAs(UnmanagedType.Bool)]
+        public static extern bool PostThreadMessageW(uint idThread, uint Msg, IntPtr wParam, IntPtr lParam);
+
+        /// <summary>
+        /// 定时器。hWnd 传 null 时是"线程计时器"：WM_TIMER 直接进本线程的消息队列，
+        /// 由本线程的泵分发（这正是长按计时需要的语义，见 InputHookService.StartHoldTimer）。
+        /// </summary>
+        [DllImport("user32.dll", SetLastError = true)]
+        public static extern UIntPtr SetTimer(IntPtr hWnd, UIntPtr nIDEvent, uint uElapse, IntPtr lpTimerFunc);
+
+        [DllImport("user32.dll", SetLastError = true)]
+        [return: MarshalAs(UnmanagedType.Bool)]
+        public static extern bool KillTimer(IntPtr hWnd, UIntPtr uIDEvent);
+
+        [DllImport("kernel32.dll")]
+        public static extern int GetCurrentThreadId();
 
         [DllImport("user32.dll", SetLastError = true)]
         public static extern uint SendInput(uint nInputs, INPUT[] pInputs, int cbSize);

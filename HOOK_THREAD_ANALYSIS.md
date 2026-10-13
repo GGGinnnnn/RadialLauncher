@@ -3,6 +3,18 @@
 > 依据：InputHookService.cs（当前 730 行）、MainWindow.xaml.cs、NativeMethods.cs、WheelWindow.xaml.cs 的现源码逐行核对。
 > 本文只做分析与方案设计，不改代码。
 
+> **状态：已实施。** §3 的 ①②③ 已按本方案落地（NativeMethods 增补 → InputHookService 原子重构 → MainWindow 接快照）。
+> 实施中与本文有两处偏离，均已在代码注释里写明理由：
+> 1. **钩子线程用 `IsBackground = true`**（本文 §3.2-A 原写 false）。理由：背景线程不会在漏掉 `Dispose()`
+>    的退出路径上把进程吊住 —— “进程退不掉”正是这个钩子历史上最常见的事故形态；正常退出仍走
+>    `WM_APP+Shutdown` → `Join(2000)` 的有序收尾（实测日志：`钩子线程已退出` → `钩子线程已正常收工`）。
+> 2. **环境判定用 `Post` 到 UI + 结果经 `WM_APP+TriggerResolved` 回投钩子线程**（即本文 §3.2-G 方案 1），
+>    钩子线程侧不等待、不阻塞；`_fired` 由状态机在裁决处理器里置位。
+>
+> 真机验证（本机实测，非纸面）：Ctrl 长按 → `轮盘已唤出` → Esc → `轮盘已取消`；Win 轻点补发使前台切到
+> `SearchHost.exe`（开始菜单被补发出来）；中键长按接管 → `轮盘已唤出`；`--quit` 优雅退出，钩子线程 Join 成功；
+> 最长回调耗时 0.53–0.82 ms（改造前日志为 23–37 ms）。
+
 ---
 
 ## 1. 现状：钩子到底"住在"哪个线程

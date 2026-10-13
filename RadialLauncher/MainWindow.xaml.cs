@@ -170,16 +170,19 @@ namespace RadialLauncher
         {
             var config = _configService.Config;
 
-            _hook.ListenCtrl = config.Trigger.ByCtrl;
-            _hook.ListenWin = config.Trigger.ByWin;
-            _hook.ListenMiddle = config.Trigger.ByMiddleMouse;
-            _hook.SuppressWin = config.Trigger.SuppressWinKey;
-            _hook.SuppressMiddle = config.Trigger.SuppressMiddleClick;
-            _hook.CancelOnOtherKey = config.Trigger.CancelOnOtherKey;
-            _hook.HoldThresholdMs = config.Trigger.HoldThresholdMs;
+            // 一次性构造完整快照交给钩子服务。它不再暴露逐个可写属性 ——
+            // 那些属性会被 UI 线程直写、而钩子线程正在读，是典型的数据竞争。
+            _hook.UpdateSettings(new InputHookService.HookSettings(
+                ListenCtrl: config.Trigger.ByCtrl,
+                ListenWin: config.Trigger.ByWin,
+                ListenMiddle: config.Trigger.ByMiddleMouse,
+                SuppressWin: config.Trigger.SuppressWinKey,
+                SuppressMiddle: config.Trigger.SuppressMiddleClick,
+                CancelOnOtherKey: config.Trigger.CancelOnOtherKey,
 
-            // “松开执行”模式下左键=取消；关闭该选项后左键=选中执行
-            _hook.CancelOnLeftClick = config.Appearance.ExecuteOnRelease;
+                // “松开执行”模式下左键=取消；关闭该选项后左键=选中执行
+                CancelOnLeftClick: config.Appearance.ExecuteOnRelease,
+                HoldThresholdMs: config.Trigger.HoldThresholdMs));
         }
 
         public void ApplyConfig()
