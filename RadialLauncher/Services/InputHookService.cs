@@ -6,17 +6,15 @@ using RadialLauncher.Models;
 
 namespace RadialLauncher.Services
 {
-    /// <summary>当前按住的是哪个触发键。</summary>
-    public enum TriggerKind
-    {
-        None,
-        Ctrl,
-        Win,
-        Middle,
-    }
+    // TriggerKind 连同全部手势状态机逻辑已抽到 HookGestureMachine.cs。
+    // 本类只负责三件事：安装/卸载钩子、把原始事件喂给状态机、施加状态机返回的副作用。
 
     /// <summary>
     /// 用 WH_KEYBOARD_LL / WH_MOUSE_LL 全局钩子实现“按住 Ctrl / Win / 鼠标中键唤出轮盘”。
+    ///
+    /// 分工：手势判定（吞不吞、该补发什么）全在 <see cref="HookGestureMachine"/> 里，
+    /// 那是纯逻辑、不碰 Win32 与 WPF，因此可以单独跑单元测试；
+    /// 本类只管安装钩子、解析原始事件、把状态机返回的副作用落实到真实世界。
     ///
     /// 关键设计：
     ///  - Ctrl 只观察不拦截（单独按 Ctrl 本来就没有系统行为，且 Ctrl+C 等组合键必须保持可用）。
@@ -39,20 +37,20 @@ namespace RadialLauncher.Services
     public sealed class InputHookService : IDisposable
     {
         // ===== 可配置项（由主窗口从 AppConfig 同步过来）=====
-        public bool ListenCtrl { get; set; } = true;
-        public bool ListenWin { get; set; }
-        public bool ListenMiddle { get; set; }
-        public bool SuppressWin { get; set; } = true;
-        public bool SuppressMiddle { get; set; } = true;
-        public bool CancelOnOtherKey { get; set; } = true;
-        public int HoldThresholdMs { get; set; } = 220;
+        public bool ListenCtrl { get => _machine.ListenCtrl; set => _machine.ListenCtrl = value; }
+        public bool ListenWin { get => _machine.ListenWin; set => _machine.ListenWin = value; }
+        public bool ListenMiddle { get => _machine.ListenMiddle; set => _machine.ListenMiddle = value; }
+        public bool SuppressWin { get => _machine.SuppressWin; set => _machine.SuppressWin = value; }
+        public bool SuppressMiddle { get => _machine.SuppressMiddle; set => _machine.SuppressMiddle = value; }
+        public bool CancelOnOtherKey { get => _machine.CancelOnOtherKey; set => _machine.CancelOnOtherKey = value; }
+        public int HoldThresholdMs { get => _machine.HoldThresholdMs; set => _machine.HoldThresholdMs = value; }
 
         /// <summary>
         /// 轮盘显示时左键是否用来取消。
         /// “松开触发键执行”模式下左键=取消；开启“点击执行”后左键才是选中，
         /// 由轮盘窗口自己的轮询去触发，钩子这边不能把它取消掉。
         /// </summary>
-        public bool CancelOnLeftClick { get; set; } = true;
+        public bool CancelOnLeftClick { get => _machine.CancelOnLeftClick; set => _machine.CancelOnLeftClick = value; }
 
         /// <summary>环境判定回调：返回 false 表示当前窗口不允许唤出轮盘。</summary>
         public Func<bool>? CanTrigger { get; set; }
@@ -78,26 +76,13 @@ namespace RadialLauncher.Services
         private readonly NativeMethods.LowLevelProc _kbProc;
         private readonly NativeMethods.LowLevelProc _mouseProc;
 
-        private TriggerKind _armed = TriggerKind.None;
-        private bool _fired;
-        private bool _cancelled;
-
-        private bool _winSwallowed;
-        private bool _winReplayed;
-
-        /// <summary>中键按下是否已经原样放行给系统（不做拦截）。</summary>
-        private bool _midPassedThrough;
-
-        /// <summary>接管中键时是否已经补发过一次“松开”。</summary>
-        private bool _midReleaseInjected;
-
-        private NativeMethods.POINT _midDownPoint;
+        /// <summary>
+        /// 手势状态机：所有“按住了什么、要不要吞、该补发什么”的判断都在它内部。
+        /// 本类只负责安装钩子、把原始事件喂进去、施加它返回的副作用。
+        /// </summary>
+        private readonly HookGestureMachine _machine = new();
 
         private bool _disposed;
-        private bool _paused;
-
-        /// <summary>中键拖动超过该像素距离即判定为“中键拖动”，不再拦截。</summary>
-        private const int MiddleDragCancelPx = 40;
 
         /// <summary>
         /// 钩子回调超过该毫秒数就记一条警告。
@@ -130,7 +115,7 @@ namespace RadialLauncher.Services
         public bool IsRunning => _kbHook != IntPtr.Zero || _mouseHook != IntPtr.Zero;
 
         /// <summary>轮盘是否正在显示。</summary>
-        public bool IsWheelVisible => _fired;
+        public bool IsWheelVisible => _machine.IsFired;
 
         // ============================ 延迟执行 ============================
 
@@ -233,17 +218,13 @@ namespace RadialLauncher.Services
                 NativeMethods.UnhookWindowsHookEx(_mouseHook);
                 _mouseHook = IntPtr.Zero;
             }
-            ResetGestureState();
+            ApplyEffects(_machine.ResetState());
         }
 
         /// <summary>暂停监听（设置面板打开期间使用）。</summary>
-        public void Pause()
-        {
-            _paused = true;
-            ResetGestureState();
-        }
+        public void Pause() => ApplyEffects(_machine.Pause());
 
-        public void Resume() => _paused = false;
+        public void Resume() => _machine.Resume();
 
         // ============================ 键盘钩子 ============================
 
@@ -251,7 +232,7 @@ namespace RadialLauncher.Services
         {
             if (nCode < 0) return NativeMethods.CallNextHookEx(_kbHook, nCode, wParam, lParam);
 
-            bool swallow = false;
+            var result = HookResult.None;
             long start = Stopwatch.GetTimestamp();
             int msg = 0;   // 提前声明：finally 里的慢回调告警要带上它
 
@@ -272,45 +253,31 @@ namespace RadialLauncher.Services
                 if (data.dwExtraInfo == NativeMethods.Signature)
                     return NativeMethods.CallNextHookEx(_kbHook, nCode, wParam, lParam);
 
-                if (_paused) return NativeMethods.CallNextHookEx(_kbHook, nCode, wParam, lParam);
+                if (_machine.Paused) return NativeMethods.CallNextHookEx(_kbHook, nCode, wParam, lParam);
 
                 switch (vk)
                 {
                     case NativeMethods.VK_CONTROL:
                     case NativeMethods.VK_LCONTROL:
                     case NativeMethods.VK_RCONTROL:
-                        if (ListenCtrl)
-                        {
-                            if (isDown) HandleCtrlDown();
-                            else HandleCtrlUp();
-                        }
+                        result = _machine.CtrlEvent(isDown);
                         break;
 
                     case NativeMethods.VK_LWIN:
                     case NativeMethods.VK_RWIN:
-                        if (ListenWin)
-                            swallow = isDown ? HandleWinDown() : HandleWinUp();
-                        else if (isUp && _winSwallowed)
-                        {
-                            // 监听被关掉但之前吞过一次按下，补上松开（延迟补发）。
-                            // 走 HandleWinUp 而不是自己再写一遍补发逻辑：
-                            // “什么时候该补 up”只能有一个信念来源，否则很容易变成双份 KeyUp。
-                            swallow = HandleWinUp();
-                        }
+                        result = _machine.WinEvent(isDown);
                         break;
 
                     case NativeMethods.VK_ESCAPE:
-                        if (isDown && _fired)
-                        {
-                            CancelGesture();
-                            swallow = true;
-                        }
+                        if (isDown) result = _machine.EscapeDown();
                         break;
 
                     default:
-                        if (isDown) HandleOtherKeyDown(vk);
+                        if (isDown) result = _machine.OtherKeyDown();
                         break;
                 }
+
+                ApplyEffects(result.Effects);
             }
             catch (Exception ex)
             {
@@ -323,7 +290,7 @@ namespace RadialLauncher.Services
                     "键盘 " + DescribeKeyboardMessage(msg));
             }
 
-            return swallow
+            return result.Swallow
                 ? (IntPtr)1
                 : NativeMethods.CallNextHookEx(_kbHook, nCode, wParam, lParam);
         }
@@ -334,7 +301,7 @@ namespace RadialLauncher.Services
         {
             if (nCode < 0) return NativeMethods.CallNextHookEx(_mouseHook, nCode, wParam, lParam);
 
-            bool swallow = false;
+            var result = HookResult.None;
             long start = Stopwatch.GetTimestamp();
             int msg = 0;   // 提前声明：finally 里的慢回调告警要带上它
 
@@ -347,49 +314,40 @@ namespace RadialLauncher.Services
                 if (data.dwExtraInfo == NativeMethods.Signature)
                     return NativeMethods.CallNextHookEx(_mouseHook, nCode, wParam, lParam);
 
-                if (_paused) return NativeMethods.CallNextHookEx(_mouseHook, nCode, wParam, lParam);
+                if (_machine.Paused) return NativeMethods.CallNextHookEx(_mouseHook, nCode, wParam, lParam);
+
+                var pt = new HookPoint(data.pt.X, data.pt.Y);
 
                 switch (msg)
                 {
                     case NativeMethods.WM_MBUTTONDOWN:
                         // 中键不再“一按下就拦截”：先原样放行，按住超过设定时间才接管。
-                        if (ListenMiddle) swallow = HandleMiddleDown(data.pt);
+                        result = _machine.MiddleButtonDown(pt);
                         break;
 
                     case NativeMethods.WM_MBUTTONUP:
-                        // 无论监听是否仍开着都交给 HandleMiddleUp 统一判断：
+                        // 无论监听是否仍开着都交给状态机统一判断：
                         // 它内部已覆盖“不是本程序武装的那次、但接管时补发过松开”的兜底路径。
-                        swallow = HandleMiddleUp();
+                        result = _machine.MiddleButtonUp();
                         break;
 
                     case NativeMethods.WM_MOUSEMOVE:
-                        HandleMouseMove(data.pt);
+                        result = _machine.MouseMove(pt);
                         break;
 
                     case NativeMethods.WM_LBUTTONDOWN:
                         // 左键：取消模式下用来取消轮盘；点击执行模式下要放给
                         // WheelWindow 的轮询去完成“选中并执行”。
-                        if (_fired)
-                        {
-                            if (CancelOnLeftClick) CancelGesture();
-                        }
-                        else if (_armed != TriggerKind.None)
-                        {
-                            _cancelled = true;
-                            _holdTimer.Stop();
-                        }
+                        result = _machine.LeftButtonDown();
                         break;
 
                     case NativeMethods.WM_RBUTTONDOWN:
                         // 右键始终是取消
-                        if (_fired) CancelGesture();
-                        else if (_armed != TriggerKind.None)
-                        {
-                            _cancelled = true;
-                            _holdTimer.Stop();
-                        }
+                        result = _machine.RightButtonDown();
                         break;
                 }
+
+                ApplyEffects(result.Effects);
             }
             catch (Exception ex)
             {
@@ -401,72 +359,36 @@ namespace RadialLauncher.Services
                     "鼠标 " + DescribeMouseMessage(msg));
             }
 
-            return swallow
+            return result.Swallow
                 ? (IntPtr)1
                 : NativeMethods.CallNextHookEx(_mouseHook, nCode, wParam, lParam);
         }
 
-        // ============================ Ctrl ============================
+        // ============================ 施加副作用 ============================
+        //
+        // 状态机（HookGestureMachine）只回答两件事：这次事件吞不吞、宿主该做什么。
+        // 真正的动作都在这里落地：计时器、合成输入、UI 事件。
+        // 拆开的好处是状态机可以脱离钩子与 WPF 单独测试 —— 最容易出错的恰恰是它的边界行为。
 
-        private void HandleCtrlDown()
+        /// <summary>
+        /// 把状态机返回的副作用落实到真实世界。
+        ///
+        /// <para>调用点有两处：钩子回调内（大多数事件），以及计时器到点后（<see cref="OnHoldElapsed"/>）。
+        /// 前者必须保持轻量：合成输入一律用 <see cref="Post"/> 投递到消息循环，
+        /// 绝不能在这个栈上同步执行。</para>
+        /// </summary>
+        private void ApplyEffects(HookEffect effects)
         {
-            if (_armed != TriggerKind.None) return;
-            Arm(TriggerKind.Ctrl);
-        }
+            if ((effects & HookEffect.StopHoldTimer) != 0) _holdTimer.Stop();
 
-        private void HandleCtrlUp()
-        {
-            if (_armed != TriggerKind.Ctrl) return;
-            FinishGesture();
-        }
-
-        // ============================ Win ============================
-
-        private bool HandleWinDown()
-        {
-            if (_armed != TriggerKind.None)
+            if ((effects & HookEffect.StartHoldTimer) != 0)
             {
-                // 已经因为别的键武装了，Win 按下不参与
-                return false;
+                _holdTimer.Stop();
+                _holdTimer.Interval = TimeSpan.FromMilliseconds(_machine.EffectiveHoldMs);
+                _holdTimer.Start();
             }
 
-            Arm(TriggerKind.Win);
-            _winSwallowed = SuppressWin;
-            _winReplayed = false;
-            return _winSwallowed;
-        }
-
-        private bool HandleWinUp()
-        {
-            if (_armed != TriggerKind.Win)
-            {
-                if (!_winSwallowed) return false;
-
-                // 拦截期间监听被关掉等异常路径：补一个 up
-                _winSwallowed = false;
-                if (!_winReplayed)
-                {
-                    Post(() => KeySequence.KeyUp(NativeMethods.VK_LWIN));
-                }
-                return true;
-            }
-
-            bool fired = _fired;
-            FinishGesture();
-
-            if (_winReplayed)
-            {
-                // Windows 已经收到过 Win 按下，松开必须放行
-                _winSwallowed = false;
-                _winReplayed = false;
-                return false;
-            }
-
-            if (!_winSwallowed) return false;
-
-            _winSwallowed = false;
-
-            if (!fired)
+            if ((effects & HookEffect.ReplayWinTap) != 0)
             {
                 // 轻点：延迟补发完整的按下+松开，让系统原有行为照常发生
                 Post(() =>
@@ -476,129 +398,30 @@ namespace RadialLauncher.Services
                 });
             }
 
-            return true;
-        }
-
-        // ============================ 鼠标中键 ============================
-        //
-        // 中键和 Win 键的策略不同：**按下时先不拦截，原样交给系统**。
-        //   · 轻点（没到阈值就松开）→ 什么都不做，和没装本程序时完全一样。
-        //     不需要补发合成点击，也就不会遇到“注入的按键被某些程序忽略”的问题。
-        //   · 阈值内明显拖动 → 判定为中键滚动，放弃唤出；按下本来就没拦，滚动完全是原生的。
-        //   · 按住超过阈值 → 这时才接管：弹出轮盘，并补一次“松开”，
-        //     否则程序会一直以为中键按着（浏览器会卡在中键滚动模式）。
-
-        private bool HandleMiddleDown(NativeMethods.POINT pt)
-        {
-            if (_armed != TriggerKind.None)
-            {
-                // 上一次手势还没结束（例如接管时补发过松开、但用户又立刻按下中键）就被
-                // 别的键武装了。这里必须把中键的两个标志归位，否则这一次真实松开会被
-                // 上一次残留的 _midReleaseInjected 误判成“已经补发过”而吞掉，
-                // 导致系统以为中键一直按着（浏览器卡在中键滚动模式）。
-                _midPassedThrough = false;
-                _midReleaseInjected = false;
-                return false;
-            }
-
-            Arm(TriggerKind.Middle);
-            _midDownPoint = pt;
-            _midPassedThrough = true;
-            _midReleaseInjected = false;
-
-            return false;   // 不拦截
-        }
-
-        /// <returns>true 表示吞掉这次真实的“中键松开”。</returns>
-        private bool HandleMiddleUp()
-        {
-            if (_armed != TriggerKind.Middle)
-            {
-                // 不是本程序武装的那次中键；如果之前接管时补发过松开，
-                // 这次真实松开要吞掉，免得程序收到两次松开。
-                if (!_midReleaseInjected) return false;
-
-                _midReleaseInjected = false;
-                _midPassedThrough = false;
-                return true;
-            }
-
-            bool fired = _fired;
-
-            // 必须在 FinishGesture 之前把值读走：FinishGesture 会把手势内的中键标志
-            // 归零（防止渗进下一次手势），之后再读就永远是 false 了。
-            bool injected = _midReleaseInjected;
-
-            FinishGesture();
-
-            if (!fired) return false;   // 轻点：原样放行
-
-            return injected;            // 接管过就吞掉这次真实松开
-        }
-
-        private void HandleMouseMove(NativeMethods.POINT pt)
-        {
-            if (_armed != TriggerKind.Middle || _fired || !_midPassedThrough) return;
-
-            int dx = pt.X - _midDownPoint.X;
-            int dy = pt.Y - _midDownPoint.Y;
-
-            // 中键按下后明显拖动 → 判定为“中键滚动”，放弃唤出。
-            // 按下本来就是放行的，这里什么都不用补，原生滚动完全不受影响。
-            if (dx * dx + dy * dy >= MiddleDragCancelPx * MiddleDragCancelPx)
-            {
-                _cancelled = true;
-                _holdTimer.Stop();
-            }
-        }
-
-        // ============================ 通用状态机 ============================
-
-        private void HandleOtherKeyDown(int vk)
-        {
-            var kind = _armed;
-            if (kind == TriggerKind.None) return;
-
-            if (_fired)
-            {
-                // 轮盘显示中又按了别的键 → 取消轮盘，按键继续传递
-                CancelGesture();
-            }
-            else if (!_cancelled && CancelOnOtherKey)
-            {
-                // 阈值内按了别的键 → 说明用户在做组合键（Ctrl+C / Win+E）
-                _cancelled = true;
-                _holdTimer.Stop();
-            }
-
-            if (kind == TriggerKind.Win && _winSwallowed && !_winReplayed)
-            {
-                _winReplayed = true;
+            if ((effects & HookEffect.ReplayWinDown) != 0)
                 Post(() => KeySequence.KeyDown(NativeMethods.VK_LWIN));
-            }
-        }
 
-        private void Arm(TriggerKind kind)
-        {
-            _armed = kind;
-            _fired = false;
-            _cancelled = false;
+            if ((effects & HookEffect.ReplayWinUp) != 0)
+                Post(() => KeySequence.KeyUp(NativeMethods.VK_LWIN));
 
-            _holdTimer.Stop();
-            _holdTimer.Interval = TimeSpan.FromMilliseconds(Math.Max(40, HoldThresholdMs));
-            _holdTimer.Start();
+            if ((effects & HookEffect.InjectMiddleUp) != 0) InjectMiddleUp();
+
+            if ((effects & HookEffect.EvaluateTrigger) != 0) EvaluateTrigger();
+
+            if ((effects & HookEffect.ShowWheel) != 0) ShowWheel();
+
+            if ((effects & HookEffect.HideWheel) != 0) PostCancel();
+
+            if ((effects & HookEffect.HideWheelAndExecute) != 0) PostRelease();
         }
 
         /// <summary>
-        /// 阈值到达。由 DispatcherTimer 触发，运行在消息循环里（不在钩子回调内），
-        /// 所以这里可以安全地做环境判定和唤出轮盘。
+        /// 环境判定。判定完成后结果一律交回状态机复核，由它决定这次手势还算不算数 ——
+        /// 判定期间用户可能已经松手（后续把钩子搬到专用线程后这个窗口会更明显），
+        /// 交给状态机复核才不会出现“轮盘闪一下就没了”。
         /// </summary>
-        private void OnHoldElapsed()
+        private void EvaluateTrigger()
         {
-            _holdTimer.Stop();
-
-            if (_armed == TriggerKind.None || _fired || _cancelled) return;
-
             bool allowed;
             try
             {
@@ -610,35 +433,12 @@ namespace RadialLauncher.Services
                 allowed = false;
             }
 
-            if (!allowed)
-            {
-                // 被黑白名单或全屏检测拦截：按“轻点”处理，保留系统原有按键行为
-                _cancelled = true;
-                return;
-            }
+            ApplyEffects(_machine.ResolveTrigger(allowed));
+        }
 
-            // 中键：按下时已经原样放行给系统了，现在决定接管，
-            // 必须补一次“松开”，否则程序会一直以为中键按着
-            // （浏览器会卡在中键滚动模式，鼠标一动页面就滚）。
-            // 这里运行在消息循环里、不在钩子回调内，可以安全地合成输入。
-            if (_armed == TriggerKind.Middle && _midPassedThrough && SuppressMiddle && !_midReleaseInjected)
-            {
-                _midReleaseInjected = true;
-
-                try
-                {
-                    NativeMethods.mouse_event(
-                        NativeMethods.MOUSEEVENTF_MIDDLEUP, 0, 0, 0, NativeMethods.SignatureUInt);
-                    Logger.Debug("接管中键：已补发一次中键松开");
-                }
-                catch (Exception ex)
-                {
-                    Logger.Warn("接管中键时补发松开失败：" + ex.Message);
-                }
-            }
-
-            _fired = true;
-
+        /// <summary>唤出轮盘。运行在消息循环里，不在钩子回调内。</summary>
+        private void ShowWheel()
+        {
             try
             {
                 OnTrigger?.Invoke();
@@ -646,61 +446,31 @@ namespace RadialLauncher.Services
             catch (Exception ex)
             {
                 Logger.Error("唤出轮盘失败", ex);
-                _fired = false;
+                _machine.RollbackFired();
             }
         }
 
         /// <summary>
-        /// 触发键松开：隐藏轮盘并执行选中项。可能被钩子调用，所以只能改状态 + 投递。
-        ///
-        /// <para><b>注意副作用：</b>除清空 <c>_armed</c>/<c>_fired</c>/<c>_cancelled</c> 外，
-        /// 还会把中键的两个标志（<c>_midPassedThrough</c>/<c>_midReleaseInjected</c>）归零。
-        /// 因此任何需要读取这两个标志的调用方都**必须在本方法之前读取**，
-        /// 参见 <see cref="HandleMiddleUp"/>。Win 的两个标志（<c>_winSwallowed</c>/<c>_winReplayed</c>）
-        /// 不在此处清理，仍由 <see cref="HandleWinUp"/> 负责。</para>
+        /// 接管中键：按下时已经原样放行给系统了，现在必须补一次“松开”，
+        /// 否则程序会一直以为中键按着（浏览器会卡在中键滚动模式，鼠标一动页面就滚）。
         /// </summary>
-        private void FinishGesture()
+        private void InjectMiddleUp()
         {
-            _holdTimer.Stop();
-
-            bool wasFired = _fired;
-            _armed = TriggerKind.None;
-            _fired = false;
-            _cancelled = false;
-
-            // 手势只要结束，中键的两个标志就必须归位：调用方（HandleMiddleUp）会先读走
-            // 它需要的那份值，这里清掉是为了防止任何残留标志渗进下一次手势。
-            _midPassedThrough = false;
-            _midReleaseInjected = false;
-
-            if (!wasFired) return;
-
-            // ★ 执行动作会 Process.Start / SendInput / 写日志，必须离开钩子回调
-            Post(() =>
+            try
             {
-                try
-                {
-                    OnRelease?.Invoke();
-                }
-                catch (Exception ex)
-                {
-                    Logger.Error("轮盘松开处理失败", ex);
-                }
-            });
+                NativeMethods.mouse_event(
+                    NativeMethods.MOUSEEVENTF_MIDDLEUP, 0, 0, 0, NativeMethods.SignatureUInt);
+                Logger.Debug("接管中键：已补发一次中键松开");
+            }
+            catch (Exception ex)
+            {
+                Logger.Warn("接管中键时补发松开失败：" + ex.Message);
+            }
         }
 
-        /// <summary>取消：隐藏轮盘，不执行任何功能。</summary>
-        private void CancelGesture()
+        /// <summary>取消：隐藏轮盘，不执行任何功能。可能被钩子调用，所以只能投递。</summary>
+        private void PostCancel()
         {
-            _holdTimer.Stop();
-
-            bool wasFired = _fired;
-            _armed = TriggerKind.None;
-            _fired = false;
-            _cancelled = false;
-
-            if (!wasFired) return;
-
             Post(() =>
             {
                 try
@@ -714,18 +484,27 @@ namespace RadialLauncher.Services
             });
         }
 
-        /// <summary>只清状态，不补发任何按键。</summary>
-        private void ResetGestureState()
+        /// <summary>松开执行：隐藏轮盘并执行选中项。可能被钩子调用，所以只能投递。</summary>
+        private void PostRelease()
         {
-            _holdTimer.Stop();
-            _armed = TriggerKind.None;
-            _fired = false;
-            _cancelled = false;
-            _winSwallowed = false;
-            _winReplayed = false;
-            _midPassedThrough = false;
-            _midReleaseInjected = false;
+            Post(() =>
+            {
+                try
+                {
+                    OnRelease?.Invoke();
+                }
+                catch (Exception ex)
+                {
+                    Logger.Error("轮盘松开处理失败", ex);
+                }
+            });
         }
+
+        /// <summary>
+        /// 阈值到达：计时到点后由 DispatcherTimer 调用，运行在消息循环里（不在钩子回调内），
+        /// 所以这里可以安全地做环境判定和唤出轮盘。
+        /// </summary>
+        private void OnHoldElapsed() => ApplyEffects(_machine.HoldElapsed());
 
         public void Dispose()
         {
@@ -736,20 +515,15 @@ namespace RadialLauncher.Services
             {
                 // 顺序很重要：先摘钩子，确保后面补发的按键不会再走进我们自己的回调，
                 // 也避免在进程退出过程中还留着内核钩子（那正是进程退不掉的原因）。
-                bool winStuck = _winSwallowed && !_winReplayed;
-
-                // 与 OnHoldElapsed 的接管条件保持一致：只有 SuppressMiddle 时我们才会
-                // 主动补发过一次中键松开。若 SuppressMiddle 关闭，按下本就一直放行、
-                // 从未补发，此时 _midPassedThrough 恒为 true、_midReleaseInjected 恒为
-                // false，这里是用户真实按着的中键，绝不能替他补一次松开。
-                bool midStuck = SuppressMiddle && _midPassedThrough && !_midReleaseInjected;
+                // 残留按键要在清理之前问状态机 —— ResetState 会把标志位清掉。
+                var abort = _machine.ComputeAbortEffects();
 
                 Stop();
 
                 try
                 {
-                    if (winStuck) KeySequence.KeyUp(NativeMethods.VK_LWIN);
-                    if (midStuck)
+                    if ((abort & HookEffect.ReplayWinUp) != 0) KeySequence.KeyUp(NativeMethods.VK_LWIN);
+                    if ((abort & HookEffect.InjectMiddleUp) != 0)
                     {
                         NativeMethods.mouse_event(
                             NativeMethods.MOUSEEVENTF_MIDDLEUP, 0, 0, 0, NativeMethods.SignatureUInt);
