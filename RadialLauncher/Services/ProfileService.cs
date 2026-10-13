@@ -71,8 +71,15 @@ namespace RadialLauncher.Services
         /// <summary>找出与某个进程名匹配的配置（设置面板用）。</summary>
         public static AppProfile? FindByProcess(AppConfig config, string processName)
         {
+            if (string.IsNullOrEmpty(processName)) return null;
+
             foreach (var profile in config.Profiles)
             {
+                // 这个方法会被设置面板直接用，拿到的可能是刚反序列化、
+                // 尚未经过 ConfigService.Normalize 的配置对象：
+                // profile 本身、ProcessNames 列表都可能是 null。
+                if (profile?.ProcessNames == null) continue;
+
                 foreach (var name in profile.ProcessNames)
                 {
                     if (string.Equals(name, processName, System.StringComparison.OrdinalIgnoreCase))

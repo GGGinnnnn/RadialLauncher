@@ -426,7 +426,6 @@ namespace RadialLauncher.Services
                 _winSwallowed = false;
                 if (!_winReplayed)
                 {
-                    _winReplayed = false;
                     Post(() => KeySequence.KeyUp(NativeMethods.VK_LWIN));
                 }
                 return true;

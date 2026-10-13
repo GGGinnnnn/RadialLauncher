@@ -1,3 +1,4 @@
+using System.Threading;
 using RadialLauncher.Services;
 using Xunit;
 
@@ -171,5 +172,92 @@ public class FontCatalogTests
     {
         Assert.False(string.IsNullOrWhiteSpace(FontCatalog.DescribeEffective(null)));
         Assert.False(string.IsNullOrWhiteSpace(FontCatalog.DescribeEffective("__NoSuchFont__")));
+    }
+
+    // ==================== 惰性缓存与并发 ====================
+
+    [Fact]
+    public void Cache_ReturnsSameInstanceOnRepeatedAccess()
+    {
+        FontCatalog.InvalidateCache();
+
+        var first = FontCatalog.InstalledFamilies;
+        var second = FontCatalog.InstalledFamilies;
+
+        // 同一份缓存对象，不应每次重建
+        Assert.Same(first, second);
+    }
+
+    [Fact]
+    public void InvalidateCache_ForcesRebuild()
+    {
+        var first = FontCatalog.InstalledFamilies;
+        FontCatalog.InvalidateCache();
+        var second = FontCatalog.InstalledFamilies;
+
+        Assert.NotSame(first, second);
+        // 内容应保持一致（系统字体没变）
+        Assert.Equal(first, second);
+    }
+
+    [Fact]
+    public void InstalledFamilies_IsSortedAndDistinct()
+    {
+        FontCatalog.InvalidateCache();
+        var list = FontCatalog.InstalledFamilies;
+
+        var sorted = list
+            .OrderBy(s => s, StringComparer.CurrentCultureIgnoreCase)
+            .ToList();
+
+        Assert.Equal(sorted, list);
+        Assert.Equal(list.Count, list.Distinct(StringComparer.OrdinalIgnoreCase).Count());
+    }
+
+    [Fact]
+    public void ConcurrentFirstAccess_DoesNotThrowAndYieldsConsistentCache()
+    {
+        // 回归护栏：缓存未加锁时，多线程首次访问会各自枚举一遍系统字体，
+        // 且 _installedSorted 的非原子赋值可能让别的线程读到半成品。
+        // 现在用双检锁 + Volatile 发布，并发下应只产出一份一致的缓存。
+        const int threads = 8;
+        var results = new List<string>[threads];
+        var errors = new List<Exception>();
+
+        var workers = new Thread[threads];
+        using var barrier = new Barrier(threads);
+
+        for (int i = 0; i < threads; i++)
+        {
+            int index = i;
+            workers[i] = new Thread(() =>
+            {
+                try
+                {
+                    barrier.SignalAndWait();   // 尽量让所有线程同时首次访问
+                    results[index] = FontCatalog.InstalledFamilies;
+
+                    // 顺带压一下 InstalledSet 那条路径
+                    _ = FontCatalog.IsInstalled("Segoe UI");
+                }
+                catch (Exception ex)
+                {
+                    lock (errors) errors.Add(ex);
+                }
+            });
+            workers[i].IsBackground = true;
+        }
+
+        FontCatalog.InvalidateCache();
+        foreach (var w in workers) w.Start();
+        foreach (var w in workers) w.Join();
+
+        Assert.Empty(errors);
+
+        // 所有线程拿到的应是同一个实例
+        var first = results[0];
+        Assert.NotNull(first);
+        foreach (var list in results)
+            Assert.Same(first, list);
     }
 }

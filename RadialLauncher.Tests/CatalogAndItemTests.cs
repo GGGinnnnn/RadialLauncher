@@ -314,3 +314,125 @@ public class IconServiceTests
             Assert.StartsWith(expanded, guess, StringComparison.OrdinalIgnoreCase);
     }
 }
+
+/// <summary>IconService 图标缓存的容量上限与命中行为。</summary>
+public class IconServiceCacheTests
+{
+    // 说明：图标提取依赖 shell32 与 WPF 成像，测试环境不一定能成功，
+    // 但"失败也缓存 null"与"LRU 淘汰"这两条逻辑与图标是否取到无关，
+    // 所以下面都只断言缓存规模，不假设图标一定非空。
+
+    private static string SomePath(int index) => $@"C:\__icon_cache_test__\{index}.exe";
+
+    [Fact]
+    public void ClearCache_EmptiesTheCache()
+    {
+        IconService.GetIcon(SomePath(1));
+        Assert.True(IconService.CacheCount > 0);
+
+        IconService.ClearCache();
+        Assert.Equal(0, IconService.CacheCount);
+    }
+
+    [Fact]
+    public void NegativeResultsAreCached()
+    {
+        // 路径不存在 → 图标为 null，但这个"没图标"的结论必须被缓存，
+        // 否则每次经过设置面板都会重新问一遍系统。
+        IconService.ClearCache();
+        var path = SomePath(42);
+
+        var first = IconService.GetIcon(path);
+        Assert.True(IconService.CacheCount > 0);
+
+        var second = IconService.GetIcon(path);
+        Assert.Same(first, second);
+        Assert.Equal(1, IconService.CacheCount);
+    }
+
+    [Fact]
+    public void Cache_DoesNotGrowBeyondCapacity()
+    {
+        // 回归护栏：缓存原本是无上限 Dictionary，设置面板长驻 +
+        // 用户反复切换大量图标路径 → 无限增长（每个条目还持有 BitmapSource）。
+        IconService.ClearCache();
+
+        for (int i = 0; i < 400; i++)
+            IconService.GetIcon(SomePath(i));
+
+        Assert.True(
+            IconService.CacheCount <= 256,
+            $"缓存条目数 {IconService.CacheCount} 超过上限 256");
+    }
+
+    [Fact]
+    public void Cache_KeepsRecentlyUsedEntries()
+    {
+        IconService.ClearCache();
+
+        // 填满并略超上限，确保发生淘汰
+        for (int i = 0; i < 400; i++)
+            IconService.GetIcon(SomePath(i));
+
+        // 最近访问的那批应当还在缓存里
+        var recent = SomePath(399);
+        int before = IconService.CacheCount;
+        IconService.GetIcon(recent);
+        Assert.Equal(before, IconService.CacheCount);   // 命中，不新增
+    }
+
+    [Fact]
+    public void Cache_SeparatesLargeAndSmallIcons()
+    {
+        IconService.ClearCache();
+        var path = SomePath(7);
+
+        IconService.GetIcon(path, small: false);
+        IconService.GetIcon(path, small: true);
+
+        // 大图标与单图标是两条不同的键，应各占一条
+        Assert.Equal(2, IconService.CacheCount);
+    }
+
+    [Fact]
+    public void GetIcon_ReturnsNullForBlankPath()
+    {
+        IconService.ClearCache();
+        Assert.Null(IconService.GetIcon(null));
+        Assert.Null(IconService.GetIcon(""));
+        Assert.Null(IconService.GetIcon("   "));
+        Assert.Equal(0, IconService.CacheCount);   // 空路径不入缓存
+    }
+
+    [Fact]
+    public void ConcurrentAccess_DoesNotThrow()
+    {
+        IconService.ClearCache();
+        var errors = new System.Collections.Concurrent.ConcurrentBag<Exception>();
+
+        var threads = new System.Threading.Thread[4];
+        for (int i = 0; i < threads.Length; i++)
+        {
+            int offset = i;
+            threads[i] = new System.Threading.Thread(() =>
+            {
+                try
+                {
+                    for (int n = 0; n < 300; n++)
+                        IconService.GetIcon(SomePath(offset * 1000 + n));
+                }
+                catch (Exception ex)
+                {
+                    errors.Add(ex);
+                }
+            });
+            threads[i].IsBackground = true;
+        }
+
+        foreach (var t in threads) t.Start();
+        foreach (var t in threads) t.Join();
+
+        Assert.Empty(errors);
+        Assert.True(IconService.CacheCount <= 256);
+    }
+}

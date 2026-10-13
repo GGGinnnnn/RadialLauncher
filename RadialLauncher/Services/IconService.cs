@@ -44,8 +44,79 @@ namespace RadialLauncher.Services
         [return: MarshalAs(UnmanagedType.Bool)]
         private static extern bool DestroyIcon(IntPtr hIcon);
 
-        private static readonly Dictionary<string, ImageSource?> Cache = new(StringComparer.OrdinalIgnoreCase);
+        /// <summary>
+        /// 图标缓存。每个条目持有一个已 Freeze 的 BitmapSource（占显存），
+        /// 而设置面板是长驻窗口、用户可能反复切换大量不同路径 ——
+        /// 因此必须设上限，否则缓存会无限增长。
+        ///
+        /// 实现为 LRU：<see cref="CacheKeys"/> 按"最近使用"顺序排队，
+        /// 头部最旧、尾部最新；超过 <see cref="CacheCapacity"/> 时从头淘汰。
+        /// 用双向链表 + 字典，访问/插入/淘汰都是 O(1)。
+        /// </summary>
+        private const int CacheCapacity = 256;
+
+        private static readonly Dictionary<string, LinkedListNode<CacheEntry>> Cache = new(StringComparer.OrdinalIgnoreCase);
+        private static readonly LinkedList<CacheEntry> CacheKeys = new();
         private static readonly object Gate = new();
+
+        private readonly record struct CacheEntry(string Key, ImageSource? Icon);
+
+        /// <summary>当前缓存条目数（诊断 / 测试用）。</summary>
+        public static int CacheCount
+        {
+            get { lock (Gate) return Cache.Count; }
+        }
+
+        /// <summary>
+        /// 查缓存。<paramref name="found"/> 表示"键存在"（值可能是 null —— 
+        /// 那表示"这个路径确实没有图标"，也要当成命中，否则每次都会重新问系统）。
+        /// </summary>
+        private static ImageSource? TryGetCached(string key, out bool found)
+        {
+            if (!Cache.TryGetValue(key, out var node))
+            {
+                found = false;
+                return null;
+            }
+
+            // 命中即提到队尾，标记为最近使用
+            CacheKeys.Remove(node);
+            CacheKeys.AddLast(node);
+
+            found = true;
+            return node.Value.Icon;
+        }
+
+        private static void Store(string key, ImageSource? icon)
+        {
+            if (Cache.TryGetValue(key, out var existing))
+            {
+                // 已有条目：更新内容并提到队尾
+                CacheKeys.Remove(existing);
+                Cache.Remove(key);
+            }
+
+            var node = CacheKeys.AddLast(new CacheEntry(key, icon));
+            Cache[key] = node;
+
+            // 超出上限就淘汰最久未使用的（队头）
+            while (Cache.Count > CacheCapacity && CacheKeys.First != null)
+            {
+                var oldest = CacheKeys.First;
+                CacheKeys.RemoveFirst();
+                Cache.Remove(oldest.Value.Key);
+            }
+        }
+
+        /// <summary>清空图标缓存（设置面板关闭或用户主动刷新时调用）。</summary>
+        public static void ClearCache()
+        {
+            lock (Gate)
+            {
+                Cache.Clear();
+                CacheKeys.Clear();
+            }
+        }
 
         /// <summary>取文件/文件夹的系统图标。失败返回 null。</summary>
         public static ImageSource? GetIcon(string? path, bool small = false)
@@ -53,9 +124,11 @@ namespace RadialLauncher.Services
             if (string.IsNullOrWhiteSpace(path)) return null;
 
             var key = (small ? "s|" : "l|") + path;
+
             lock (Gate)
             {
-                if (Cache.TryGetValue(key, out var cached)) return cached;
+                var hit = TryGetCached(key, out bool found);
+                if (found) return hit;
             }
 
             ImageSource? result = null;
@@ -104,7 +177,7 @@ namespace RadialLauncher.Services
 
             lock (Gate)
             {
-                Cache[key] = result;
+                Store(key, result);
             }
 
             return result;

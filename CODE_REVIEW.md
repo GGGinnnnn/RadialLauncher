@@ -4,7 +4,7 @@
 审查日期：2026-10-13
 审查方式：通读全部源码 + 为可测部分编写 300 个单元测试并运行验证
 
-> **状态更新（2026-10-13，修复轮）**：本报告第二节的 3 个 P1 问题**已全部修复**，测试从 300 增至 **339 个，全部通过**；Release 构建 0 警告 0 错误；`--selftest` 自检全部通过。各条目末尾附有「✅ 已修复」说明，原始分析保留以便追溯。
+> **状态更新（2026-10-13，修复轮）**：本报告第二节的 3 个 P1 问题**已全部修复**，第三节的 5 个 P2 问题**亦已修复**；测试从 300 增至 **355 个，全部通过**；Release 构建 0 警告 0 错误；`--selftest` 自检全部通过。各条目末尾附有「✅ 已修复」说明，原始分析保留以便追溯。
 
 ---
 
@@ -13,6 +13,8 @@
 整体质量高于同类个人项目：分层清晰（`Models` / `Services` / `Views` / `Controls`）、Win32 互操作集中声明、钩子回调严格遵循「只改状态 + `BeginInvoke` 投递」的 300ms 约束、配置采用「临时文件 + `File.Replace`」原子写入、v1→v2 迁移有明确判据、异常兜底到位、日志失败不影响主流程。日常使用中长时间挂后台的稳定性设计（单实例 + 卡死检测 + `--force` 逃生口）考虑得很周全。
 
 **结论：无阻断性缺陷。** 发现 3 个应当修复的问题（P1）、若干健壮性/可维护性改进点（P2），以及一批可测试性缺口（P3）。
+
+> **修复进展**：P1（3 项）与 P2（5 项）**已全部修复并验证**；P3（2 项）仍待处理 —— 它们不是缺陷，而是"阻碍自动化验证"的设计改造，收益最大的是 #12 钩子状态机抽纯函数。
 
 ---
 
@@ -108,6 +110,10 @@ case "VolumeUp":
 
 **建议**：用 `Lazy<HashSet<string>>` / `Lazy<List<string>>`，或在 getter 内加 `lock`。注意 `InvalidateCache()` 也要相应改成重建 `Lazy`。
 
+**✅ 已修复**：改为**双检锁 + `Volatile` 发布**。快路径用 `Volatile.Read` 无锁读引用；未命中时进 `lock (CacheGate)` 再查一次；构造完成后用 `Volatile.Write` 发布引用，避免其他线程看到"引用已赋值但内容对其他 core 尚未可见"的半成品。`InvalidateCache()` 也在锁内清两个引用并保证可见性。
+
+新增 4 个测试：同一实例复用、失效后重建、排序与去重、以及 `ConcurrentFirstAccess_DoesNotThrowAndYieldsConsistentCache`（8 线程 `Barrier` 同时首次访问，断言拿到同一实例且无异常）——正是本条描述的并发缺陷的回归护栏。
+
 ### 5. `InputHookService.Dispose` 中的冗余赋值
 
 **位置**：`Services/InputHookService.cs:429` 附近
@@ -122,11 +128,15 @@ if (!_winReplayed)
 
 **建议**：删除此行。属于纯噪声，但会让人误以为这里有状态机技巧。
 
+**✅ 已修复**：该行已删除，并补了一句注释说明这是"拦截期间监听被关掉"的异常路径。
+
 ### 6. `WheelWindow` 与 `WheelPreview` 的几何计算大面积重复
 
 `LoadWheel`（`WheelWindow.xaml.cs:218-360`）与 `Render`（`WheelPreview.xaml.cs:40-120`）各自实现了一遍：半径、底盘半径、光晕留白、窗口边长、图标尺寸、字号缩放。除上面第 1 条已发现的不一致外，这些魔数（`0.72` / `0.44` / `0.34` / `0.128` / `0.94` / `0.6`）在两处各写一份，后续调整必然再次漂移。
 
 **建议**：抽出 `WheelGeometry`（纯计算，无 WPF 依赖），输入 `AppearanceSettings` + 方向数，输出 `(radius, plateRadius, windowSize, itemSize, iconSize, fontSize)`。这样既消除不一致，又能**直接单元测试**，不用起窗口。
+
+**✅ 已修复**：已随 P1-1 一并完成 —— `Services/WheelGeometry.cs` 即本条建议的产物。
 
 ### 7. `KeyStateHelper.WaitForModifiersReleased` 是忙等自旋
 
@@ -136,6 +146,12 @@ if (!_winReplayed)
 
 **建议**：加注释警示"不要在 UI 线程调用"，或改为 `SpinWait` / 明确标注调用约束。
 
+**✅ 已修复**：两处都做了。
+1. 自旋改为 `SpinWait.SpinOnce()`（会在若干次后自行升级为 yield/Sleep(1)，比手写 `Sleep(0)/Sleep(1)` 更贴合 CPU 情况），并补了 `maxMs < 0` 的入参规整。
+2. XML 文档里加了显式的 **「调用约束：不要在 UI 线程直接调用」** 段落，说明最坏会占用调用线程 `maxMs` 毫秒、当前唯一生产调用点在钩子线程、UI 侧应走 `MainWindow` 的 `DispatcherTimer` 异步路径。
+
+> 附带发现：该方法当前**没有任何调用者**（`MainWindow` 用的是自己的 `DispatcherTimer` 异步实现）。本次保留它作为同步 API 备用，但已在文档注释里写清约束。若后续确认不需要同步版本，可整个删除。
+
 ### 8. `WindowDetectorService.FindByProcess` 未防 `ProcessNames` 为 null
 
 **位置**：`Services/ProfileService.cs:72-83`
@@ -144,6 +160,10 @@ if (!_winReplayed)
 
 **建议**：循环前加 `if (profile?.ProcessNames == null) continue;`。
 
+**✅ 已修复**：已加 `if (profile?.ProcessNames == null) continue;`，并在入口补了 `string.IsNullOrEmpty(processName)` 的早退（空目标名不可能匹配到任何配置）。
+
+新增 5 个测试：`ProcessNames` 为 null、`Profiles` 混入 null 元素、全为坏条目、以及 `[Theory]` 覆盖空/`null` 目标名。
+
 ### 9. `IconService` 缓存无上限
 
 **位置**：`Services/IconService.cs`
@@ -151,6 +171,12 @@ if (!_winReplayed)
 `Cache` 是 `Dictionary`，键含完整路径。若用户在设置里反复切换大量不同的图标路径，缓存会无限增长（每个条目还持有已 `Freeze` 的 `BitmapSource`，占显存）。实践中影响有限，但设置面板是长驻窗口。
 
 **建议**：改成带上限的 LRU，或提供按 key 清理。
+
+**✅ 已修复**：改为 **LRU，上限 256 条**（`Dictionary<string, LinkedListNode<CacheEntry>>` + `LinkedList<CacheEntry>`，查找/插入/淘汰均 O(1)）。命中即把节点提到队尾；超限时从队头淘汰最久未使用者。另提供 `public static void ClearCache()` 供设置面板关闭或用户刷新时主动清理，以及 `public static int CacheCount` 用于诊断/测试。
+
+保留了原有语义：**失败结果（null）同样入缓存**——"这个路径确实没有图标"也是有效结论，否则每次经过设置面板都会重新问一遍 shell32。
+
+新增 7 个测试：清空、负结果缓存、400 次不同路径后不超上限、近期条目仍命中、大/小图标键分离、空路径不入缓存、4 线程并发不抛异常且不超上限。
 
 ---
 
@@ -193,7 +219,7 @@ public static string DataDirectory { get; } = Path.Combine(..., "RadialLauncher"
 
 新增项目 `RadialLauncher.Tests`（xUnit，`net8.0-windows` + `UseWPF`，已加入 `RadialLauncher.slnx`）。
 
-**结果：339 个测试全部通过**（约 2s；修复 P1 前为 300 个）。
+**结果：355 个测试全部通过**（约 7s；修复 P1 前为 300 个，P1 修复后 339，P2 修复后 355）。
 
 | 测试文件 | 覆盖对象 | 用例数（约） |
 |---|---|---|
@@ -204,10 +230,10 @@ public static string DataDirectory { get; } = Path.Combine(..., "RadialLauncher"
 | `AppProfileTests` | 进程名/标题关键字匹配 | 18 |
 | `ProfileServiceTests` | 全局 vs 专属轮盘路由、方向数覆盖、空项回退 | 25 |
 | `ShortcutCatalogTests` | 规范化、查找、搜索、数据完整性（含"全部按键可解析"） | 30 |
-| `FontCatalogTests` | 字体回退链拼接、去重、推荐列表 | 22 |
+| `FontCatalogTests` | 字体回退链拼接、去重、推荐列表、惰性缓存复用与并发一致性 | 26 |
 | `LocTests` | 索引器、语言切换、`PropertyChanged`、键命名规范、**中英文表完备性** | 20 |
 | `RadialMenuTests` | 角度→索引映射（4 向/8 向）、死区、越界钳制 | 22 |
-| `CatalogAndItemTests` | `WheelItem` 克隆、`BuiltinCatalog`（含 `Keys` 表完整性）、`IconService.GuessExecutable` | 30 |
+| `CatalogAndItemTests` | `WheelItem` 克隆、`BuiltinCatalog`（含 `Keys` 表完整性）、`IconService.GuessExecutable`、**图标缓存 LRU** | 37 |
 | `WheelGeometryTests` | 方向数规整、半径系数、光晕留白、缩放组合、`FitScaleFor` 适配 | 25 |
 | `LoggerTests` | 级别过滤、路径约束、枚举语义 | 8 |
 
@@ -232,10 +258,10 @@ public static string DataDirectory { get; } = Path.Combine(..., "RadialLauncher"
 | P1 | #2 `Normalize` 补三行 null 兜底 | 极小 | ✅ 已完成 |
 | P1 | #1 `WheelGeometry` 抽取，消除四向预览裁剪 | 小 | ✅ 已完成 |
 | P1 | #3 媒体键映射改为显式表 + 补测试 | 小 | ✅ 已完成 |
-| P2 | #4 `FontCatalog` 缓存加锁 | 小 | 待处理 |
+| P2 | #4 `FontCatalog` 缓存加锁 | 小 | ✅ 已完成 |
 | P2 | #6 几何计算统一（与 #1 一并做） | 中 | ✅ 已随 #1 完成 |
-| P2 | #8 `FindByProcess` null 防护 | 极小 | 待处理 |
-| P2 | #5 删除冗余赋值 | 极小 | 待处理 |
-| P2 | #7、#9 注释/缓存上限 | 小 | 待处理 |
+| P2 | #8 `FindByProcess` null 防护 | 极小 | ✅ 已完成 |
+| P2 | #5 删除冗余赋值 | 极小 | ✅ 已完成 |
+| P2 | #7、#9 注释/缓存上限 | 小 | ✅ 已完成 |
 | P3 | #10 数据目录可注入（解锁日志轮转测试） | 中 | 待处理 |
 | P3 | #12 钩子状态机抽纯函数（收益最大） | 大 | 待处理 |

@@ -273,6 +273,50 @@ public class ProfileServiceTests
         Assert.Same(profile, ProfileService.FindByProcess(config, "chrome"));
     }
 
+    [Fact]
+    public void FindByProcess_HandlesNullProcessNames()
+    {
+        // 设置面板直接调用本方法，拿到的可能是刚反序列化、
+        // 尚未经过 ConfigService.Normalize 的配置对象 —— ProcessNames 为 null 不应 NRE
+        var broken = new AppProfile { Name = "半成品", ProcessNames = null! };
+        var good = new AppProfile { Name = "有效", ProcessNames = new() { "code" } };
+        var config = MakeConfig(profilesEnabled: true, profiles: new() { broken, good });
+
+        Assert.Same(good, ProfileService.FindByProcess(config, "code"));
+    }
+
+    [Fact]
+    public void FindByProcess_HandlesNullProfileEntries()
+    {
+        var good = new AppProfile { Name = "有效", ProcessNames = new() { "code" } };
+        var config = MakeConfig(profilesEnabled: true, profiles: new() { null!, good });
+
+        Assert.Same(good, ProfileService.FindByProcess(config, "code"));
+    }
+
+    [Fact]
+    public void FindByProcess_HandlesAllBrokenEntries()
+    {
+        var config = MakeConfig(profilesEnabled: true, profiles: new()
+        {
+            null!,
+            new AppProfile { Name = "无进程名", ProcessNames = null! },
+        });
+
+        Assert.Null(ProfileService.FindByProcess(config, "code"));
+    }
+
+    [Theory]
+    [InlineData("")]
+    [InlineData(null)]
+    public void FindByProcess_ReturnsNullForBlankTarget(string? target)
+    {
+        var profile = new AppProfile { Name = "浏览器", ProcessNames = new() { "chrome" } };
+        var config = MakeConfig(profilesEnabled: true, profiles: new() { profile });
+
+        Assert.Null(ProfileService.FindByProcess(config, target!));
+    }
+
     // ==================== ActiveWheel 属性 ====================
 
     [Fact]

@@ -60,28 +60,36 @@ namespace RadialLauncher.Services
         /// <summary>
         /// 等到所有修饰键都抬起来（最多等 maxMs 毫秒），返回实际等待的毫秒数。
         /// 通常一次就过，返回值是 0。
+        ///
+        /// <para><b>调用约束：不要在 UI 线程直接调用。</b>
+        /// 这是同步阻塞等待，最坏情况会占用调用线程 <paramref name="maxMs"/> 毫秒。
+        /// 在 UI 线程调用会导致界面短暂无响应（表现为轮盘收起时"卡一下"）。
+        /// 目前唯一的生产调用点在钩子回调里（独立的钩子线程）——
+        /// <c>MainWindow</c> 另有一条 <c>DispatcherTimer</c> 的异步兜底路径，
+        /// 若将来需要从 UI 侧等待，请走那条路径而不是直接调用本方法。</para>
         /// </summary>
         public static int WaitForModifiersReleased(int maxMs = 250)
         {
+            if (maxMs < 0) maxMs = 0;
             if (!AnyModifierDown()) return 0;
 
             long start = Environment.TickCount64;
 
+            // SpinWait 在自旋若干次后会自行升级为 Sleep(1)/yield，
+            // 比手写 Thread.Sleep(0)/Sleep(1) 更贴合 CPU 情况，
+            // 也不会在单核机器上把整个调度周期空转掉。
+            var spin = new SpinWait();
+
             while (true)
             {
-                // 前几轮先让出时间片快速自旋，避免为了几毫秒去睡一整个调度周期
-                Thread.Sleep(0);
-
                 if (!AnyModifierDown()) break;
 
-                long elapsed = Environment.TickCount64 - start;
-                if (elapsed >= maxMs) break;
+                if (Environment.TickCount64 - start >= maxMs) break;
 
-                Thread.Sleep(1);
+                spin.SpinOnce();
             }
 
-            int waited = (int)(Environment.TickCount64 - start);
-            return waited;
+            return (int)(Environment.TickCount64 - start);
         }
     }
 }

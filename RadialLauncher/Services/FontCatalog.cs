@@ -2,6 +2,7 @@ using System;
 using System.Collections.Generic;
 using System.Globalization;
 using System.Linq;
+using System.Threading;
 using System.Windows.Media;
 
 namespace RadialLauncher.Services
@@ -42,6 +43,14 @@ namespace RadialLauncher.Services
         /// <summary>界面字体的最终回退链尾部，保证永远有字可用。</summary>
         public const string FallbackChain = "Microsoft YaHei UI, Segoe UI, Arial";
 
+        /// <summary>
+        /// 保护下面两个惰性缓存的重建。枚举全部系统字体开销不小，
+        /// 而首次访问可能来自 UI 线程（设置面板）与后台线程（钩子回调）两处，
+        /// 没有锁会重复枚举，且 <c>_installedSorted</c> 的赋值不是原子的，
+        /// 另一个线程可能读到"引用已赋值但列表内容尚未对其他 core 可见"的状态。
+        /// </summary>
+        private static readonly object CacheGate = new();
+
         private static HashSet<string>? _installed;
         private static List<string>? _installedSorted;
 
@@ -50,36 +59,45 @@ namespace RadialLauncher.Services
         {
             get
             {
-                if (_installed != null) return _installed;
+                // 快路径：无锁读取，读到的引用要么是 null，要么是构造完才发布的完整对象
+                var cached = Volatile.Read(ref _installed);
+                if (cached != null) return cached;
 
-                var set = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
-                try
+                lock (CacheGate)
                 {
-                    foreach (var family in Fonts.SystemFontFamilies)
-                    {
-                        // Source 通常是英文名；FamilyNames 里还有各语言的本地化名
-                        if (!string.IsNullOrWhiteSpace(family.Source)) set.Add(family.Source);
+                    // 双检：可能已有别的线程先构造好了
+                    if (_installed != null) return _installed;
 
-                        try
+                    var set = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
+                    try
+                    {
+                        foreach (var family in Fonts.SystemFontFamilies)
                         {
-                            foreach (var pair in family.FamilyNames)
+                            // Source 通常是英文名；FamilyNames 里还有各语言的本地化名
+                            if (!string.IsNullOrWhiteSpace(family.Source)) set.Add(family.Source);
+
+                            try
                             {
-                                if (!string.IsNullOrWhiteSpace(pair.Value)) set.Add(pair.Value);
+                                foreach (var pair in family.FamilyNames)
+                                {
+                                    if (!string.IsNullOrWhiteSpace(pair.Value)) set.Add(pair.Value);
+                                }
+                            }
+                            catch
+                            {
+                                // 个别字体读不到本地化名，忽略
                             }
                         }
-                        catch
-                        {
-                            // 个别字体读不到本地化名，忽略
-                        }
                     }
-                }
-                catch (Exception ex)
-                {
-                    Logger.Warn("枚举系统字体失败：" + ex.Message);
-                }
+                    catch (Exception ex)
+                    {
+                        Logger.Warn("枚举系统字体失败：" + ex.Message);
+                    }
 
-                _installed = set;
-                return set;
+                    // 先构造完再发布引用，避免其他线程看到半成品
+                    Volatile.Write(ref _installed, set);
+                    return set;
+                }
             }
         }
 
@@ -88,23 +106,31 @@ namespace RadialLauncher.Services
         {
             get
             {
-                if (_installedSorted != null) return _installedSorted;
+                var cached = Volatile.Read(ref _installedSorted);
+                if (cached != null) return cached;
 
-                try
+                lock (CacheGate)
                 {
-                    _installedSorted = Fonts.SystemFontFamilies
-                        .Select(f => f.Source)
-                        .Where(s => !string.IsNullOrWhiteSpace(s))
-                        .Distinct(StringComparer.OrdinalIgnoreCase)
-                        .OrderBy(s => s, StringComparer.CurrentCultureIgnoreCase)
-                        .ToList();
-                }
-                catch
-                {
-                    _installedSorted = new List<string>();
-                }
+                    if (_installedSorted != null) return _installedSorted;
 
-                return _installedSorted;
+                    List<string> sorted;
+                    try
+                    {
+                        sorted = Fonts.SystemFontFamilies
+                            .Select(f => f.Source)
+                            .Where(s => !string.IsNullOrWhiteSpace(s))
+                            .Distinct(StringComparer.OrdinalIgnoreCase)
+                            .OrderBy(s => s, StringComparer.CurrentCultureIgnoreCase)
+                            .ToList();
+                    }
+                    catch
+                    {
+                        sorted = new List<string>();
+                    }
+
+                    Volatile.Write(ref _installedSorted, sorted);
+                    return sorted;
+                }
             }
         }
 
@@ -117,8 +143,12 @@ namespace RadialLauncher.Services
         /// <summary>用户在系统里新装了字体后，清掉缓存重新探测。</summary>
         public static void InvalidateCache()
         {
-            _installed = null;
-            _installedSorted = null;
+            // 两个引用一起清，并保证清除动作对读线程可见
+            lock (CacheGate)
+            {
+                Volatile.Write(ref _installed, null);
+                Volatile.Write(ref _installedSorted, null);
+            }
             Logger.Info("字体缓存已清空，下次读取将重新枚举系统字体");
         }
 
