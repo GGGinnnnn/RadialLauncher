@@ -192,8 +192,8 @@ namespace RadialLauncher.Models
         public AppProfile Clone() => new()
         {
             Name = Name,
-            ProcessNames = new List<string>(ProcessNames),
-            TitleKeywords = new List<string>(TitleKeywords),
+            ProcessNames = [.. ProcessNames],
+            TitleKeywords = [.. TitleKeywords],
             Enabled = Enabled,
             UseGlobalItems = UseGlobalItems,
             ItemCountOverride = ItemCountOverride,
@@ -240,9 +240,9 @@ namespace RadialLauncher.Models
             {
                 Name = "浏览器",
                 Icon = "🌐",
-                ProcessNames = new() { "chrome", "msedge", "firefox", "brave", "opera", "vivaldi", "360se", "360chrome" },
-                Items = new()
-                {
+                ProcessNames = ["chrome", "msedge", "firefox", "brave", "opera", "vivaldi", "360se", "360chrome"],
+                Items =
+                [
                     new WheelItem { Name = "后退",   Icon = "⬅", ActionType = "Shortcut", ActionValue = "Alt+Left" },
                     new WheelItem { Name = "前进",   Icon = "➡", ActionType = "Shortcut", ActionValue = "Alt+Right" },
                     new WheelItem { Name = "新标签页", Icon = "➕", ActionType = "Shortcut", ActionValue = "Ctrl+T" },
@@ -251,15 +251,15 @@ namespace RadialLauncher.Models
                     new WheelItem { Name = "刷新",   Icon = "🔄", ActionType = "Shortcut", ActionValue = "F5" },
                     new WheelItem { Name = "地址栏", Icon = "🔗", ActionType = "Shortcut", ActionValue = "Ctrl+L" },
                     new WheelItem { Name = "无痕窗口", Icon = "🕶", ActionType = "Shortcut", ActionValue = "Ctrl+Shift+N" },
-                },
+                ],
             },
             new AppProfile
             {
                 Name = "VS Code",
                 Icon = "🧑‍💻",
-                ProcessNames = new() { "code", "code - insiders", "cursor", "vscodium" },
-                Items = new()
-                {
+                ProcessNames = ["code", "code - insiders", "cursor", "vscodium"],
+                Items =
+                [
                     new WheelItem { Name = "终端",   Icon = "⌨", ActionType = "Shortcut", ActionValue = "Ctrl+`" },
                     new WheelItem { Name = "命令面板", Icon = "🎛", ActionType = "Shortcut", ActionValue = "Ctrl+Shift+P" },
                     new WheelItem { Name = "查找",   Icon = "🔍", ActionType = "Shortcut", ActionValue = "Ctrl+F" },
@@ -268,15 +268,15 @@ namespace RadialLauncher.Models
                     new WheelItem { Name = "源代码管理", Icon = "🌿", ActionType = "Shortcut", ActionValue = "Ctrl+Shift+G" },
                     new WheelItem { Name = "调试",   Icon = "🐞", ActionType = "Shortcut", ActionValue = "Ctrl+Shift+D" },
                     new WheelItem { Name = "设置",   Icon = "⚙", ActionType = "Shortcut", ActionValue = "Ctrl+," },
-                },
+                ],
             },
             new AppProfile
             {
                 Name = "资源管理器",
                 Icon = "🗂",
-                ProcessNames = new() { "explorer" },
-                Items = new()
-                {
+                ProcessNames = ["explorer"],
+                Items =
+                [
                     new WheelItem { Name = "新窗口", Icon = "🪟", ActionType = "Shortcut", ActionValue = "Ctrl+N" },
                     new WheelItem { Name = "地址栏", Icon = "🔗", ActionType = "Shortcut", ActionValue = "Alt+D" },
                     new WheelItem { Name = "后退",   Icon = "⬅", ActionType = "Shortcut", ActionValue = "Alt+Left" },
@@ -285,7 +285,7 @@ namespace RadialLauncher.Models
                     new WheelItem { Name = "搜索",   Icon = "🔍", ActionType = "Shortcut", ActionValue = "Ctrl+E" },
                     new WheelItem { Name = "删除",   Icon = "🗑", ActionType = "Shortcut", ActionValue = "Delete" },
                     new WheelItem { Name = "重命名", Icon = "✏", ActionType = "Shortcut", ActionValue = "F2" },
-                },
+                ],
             },
         };
     }
