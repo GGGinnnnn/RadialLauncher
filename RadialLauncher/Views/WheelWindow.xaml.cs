@@ -216,19 +216,17 @@ namespace RadialLauncher.Views
             var appearance = config.Appearance;
             double scale = appearance.Scale;
 
-            int directionCount = wheel.ItemCount is 4 or 8 ? wheel.ItemCount : 8;
-            double itemSize = appearance.ItemSize * scale;
+            int directionCount = WheelGeometry.NormalizeDirectionCount(wheel.ItemCount);
 
-            // 圆心到选项中心的距离：按周长能放下所有选项来推算，再留出呼吸感
-            double radius = directionCount == 4 ? itemSize * 2.05 : itemSize * 1.95;
-            double plateRadius = radius + itemSize * 0.72;
-            double glowPadding = appearance.ShowGlow ? 36 : 0;
-            double windowSize = 2 * (plateRadius + glowPadding);
+            // 几何计算统一走 WheelGeometry，与设置面板的预览共用同一套系数
+            var g = WheelGeometry.Compute(appearance, directionCount);
+            double itemSize = g.ItemSize;
+            double radius = g.Radius;
+            double windowSize = g.WindowSize;
+            double plateDiameter = g.PlateDiameter;
 
             Width = windowSize;
             Height = windowSize;
-
-            double plateDiameter = plateRadius * 2;
 
             GlowEllipse.Width = plateDiameter;
             GlowEllipse.Height = plateDiameter;
@@ -237,9 +235,8 @@ namespace RadialLauncher.Views
             PlateEllipse.Width = plateDiameter;
             PlateEllipse.Height = plateDiameter;
 
-            double innerDiameter = plateDiameter * 0.34;
-            InnerEllipse.Width = innerDiameter;
-            InnerEllipse.Height = innerDiameter;
+            InnerEllipse.Width = g.InnerDiameter;
+            InnerEllipse.Height = g.InnerDiameter;
 
             // 配色
             var backgroundBrush = BrushHelper.FromHex(appearance.BackgroundColor, Color.FromArgb(0xE6, 0x1A, 0x1A, 0x2E));
@@ -250,7 +247,7 @@ namespace RadialLauncher.Views
 
             PlateEllipse.Fill = backgroundBrush;
             PlateEllipse.Stroke = borderBrush;
-            PlateEllipse.StrokeThickness = appearance.ShowGlow ? 2.5 : 2;
+            PlateEllipse.StrokeThickness = g.BorderThickness;
 
             if (GlowEllipse.Effect is System.Windows.Media.Effects.DropShadowEffect glow)
                 glow.Color = ((SolidColorBrush)borderBrush).Color;
@@ -261,7 +258,7 @@ namespace RadialLauncher.Views
             Menu.Height = windowSize;
             Menu.ItemCount = Math.Max(1, directionCount);
             Menu.Radius = radius;
-            Menu.DeadZone = Math.Max(12, appearance.DeadZone * scale);
+            Menu.DeadZone = g.DeadZone;
             Menu.DefaultBrush = itemBrush;
             Menu.SelectedBrush = selectedBrush;
 
@@ -329,8 +326,8 @@ namespace RadialLauncher.Views
                 stack.Children.Add(new Image
                 {
                     Source = image,
-                    Width = itemSize * 0.44,
-                    Height = itemSize * 0.44,
+                    Width = itemSize * WheelGeometry.IconImageFactor,
+                    Height = itemSize * WheelGeometry.IconImageFactor,
                     Stretch = Stretch.Uniform,
                     HorizontalAlignment = HorizontalAlignment.Center,
                 });
@@ -340,7 +337,7 @@ namespace RadialLauncher.Views
                 stack.Children.Add(new TextBlock
                 {
                     Text = string.IsNullOrWhiteSpace(item.Icon) ? "●" : item.Icon,
-                    FontSize = Math.Max(12, itemSize * 0.34),
+                    FontSize = Math.Max(12, itemSize * WheelGeometry.IconFontFactor),
                     HorizontalAlignment = HorizontalAlignment.Center,
                     Foreground = textBrush,
                     TextAlignment = TextAlignment.Center,
@@ -352,11 +349,11 @@ namespace RadialLauncher.Views
                 stack.Children.Add(new TextBlock
                 {
                     Text = item.Name,
-                    FontSize = Math.Max(8, itemSize * 0.128),
+                    FontSize = Math.Max(8, itemSize * WheelGeometry.LabelFontFactor),
                     HorizontalAlignment = HorizontalAlignment.Center,
                     TextAlignment = TextAlignment.Center,
                     TextTrimming = TextTrimming.CharacterEllipsis,
-                    MaxWidth = itemSize * 0.94,
+                    MaxWidth = itemSize * WheelGeometry.LabelMaxWidthFactor,
                     Foreground = textBrush,
                     Margin = new Thickness(0, 1, 0, 0),
                 });
@@ -393,7 +390,8 @@ namespace RadialLauncher.Views
                     bitmap.BeginInit();
                     bitmap.UriSource = new Uri(iconPath, UriKind.Absolute);
                     bitmap.CacheOption = BitmapCacheOption.OnLoad;
-                    bitmap.DecodePixelWidth = (int)Math.Max(16, itemSize * 0.6);
+                    bitmap.DecodePixelWidth = (int)Math.Max(
+                        WheelGeometry.MinIconDecodeWidth, itemSize * WheelGeometry.IconDecodeFactor);
                     bitmap.EndInit();
                     bitmap.Freeze();
                     return bitmap;

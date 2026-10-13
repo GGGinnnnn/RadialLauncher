@@ -276,18 +276,87 @@ public class ConfigServiceNormalizeTests
         Assert.Equal(first, second);
     }
 
-    // ==================== 已知缺口（回归护栏）====================
+    // ==================== 分组 null 兜底 ====================
+
+    [Theory]
+    [InlineData("Appearance")]
+    [InlineData("Trigger")]
+    [InlineData("System")]
+    public void Normalize_BackfillsNullGroupObjects(string group)
+    {
+        // config.json 里显式写 "Appearance": null 时反序列化会得到 null；
+        // Normalize 必须先兜底，否则访问字段会 NRE，被上层 catch 吞掉后
+        // 表现为“配置莫名其妙全没了”。
+        var config = new AppConfig();
+
+        switch (group)
+        {
+            case "Appearance": config.Appearance = null!; break;
+            case "Trigger": config.Trigger = null!; break;
+            case "System": config.System = null!; break;
+        }
+
+        ConfigService.Normalize(config);
+
+        Assert.NotNull(config.Appearance);
+        Assert.NotNull(config.Trigger);
+        Assert.NotNull(config.System);
+    }
 
     [Fact]
-    public void Normalize_DoesNotBackfillNullAppearanceGroup()
+    public void Normalize_AllGroupObjectsNullAtOnce_DoesNotThrow()
     {
-        // Normalize 只对 Environment / WheelItems / Profiles 做了 null 兜底，
-        // 没有对 Appearance / Trigger / System 兜底。
-        // 如果 config.json 里显式写了 "Appearance": null，反序列化后这里会是 null，
-        // Normalize 会在读取 c.Appearance.ItemCount 时抛 NRE。
-        // 本测试记录当前行为：一旦补上兜底，这里会失败，正好提醒更新测试。
-        var config = new AppConfig { Appearance = null! };
+        var config = new AppConfig
+        {
+            Appearance = null!,
+            Trigger = null!,
+            System = null!,
+            Environment = null!,
+            WheelItems = null!,
+            Profiles = null!,
+        };
 
-        Assert.Throws<NullReferenceException>(() => ConfigService.Normalize(config));
+        ConfigService.Normalize(config);
+
+        Assert.NotNull(config.Appearance);
+        Assert.NotNull(config.Trigger);
+        Assert.NotNull(config.System);
+        Assert.NotNull(config.Environment);
+        Assert.NotNull(config.WheelItems);
+        Assert.NotNull(config.Profiles);
+    }
+
+    [Fact]
+    public void Normalize_BackfilledGroupsGetDefaultValues()
+    {
+        var config = new AppConfig
+        {
+            Appearance = null!,
+            Trigger = null!,
+            System = null!,
+        };
+
+        ConfigService.Normalize(config);
+
+        // 兜底后应等同于一份全新的默认配置
+        Assert.Equal(8, config.Appearance.ItemCount);
+        Assert.Equal(1.0, config.Appearance.Scale);
+        Assert.True(config.Trigger.ByCtrl);
+        Assert.Equal(220, config.Trigger.HoldThresholdMs);
+        Assert.Equal("zh-CN", config.System.Language);
+    }
+
+    [Fact]
+    public void Normalize_SkipsNullProfileEntries()
+    {
+        var config = new AppConfig { Profiles = new() { null!, new AppProfile { Name = "有效" } } };
+
+        ConfigService.Normalize(config);
+
+        Assert.Equal(2, config.Profiles.Count);
+        var valid = config.Profiles[1];
+        Assert.NotNull(valid.ProcessNames);
+        Assert.NotNull(valid.TitleKeywords);
+        Assert.NotNull(valid.Items);
     }
 }

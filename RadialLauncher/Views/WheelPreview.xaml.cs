@@ -41,15 +41,16 @@ namespace RadialLauncher.Views
             double centerX = width / 2;
             double centerY = height / 2;
 
-            // 缩放以适应预览区域（留出一点边距）
-            double baseWindow = 2 * (_appearance.ItemSize * 1.95 + _appearance.ItemSize * 0.72 + 8);
-            double fit = Math.Min(1.0, (size - 16) / Math.Max(1, baseWindow));
-            double scale = _appearance.Scale * fit;
+            int directionCount = WheelGeometry.NormalizeDirectionCount(_appearance.ItemCount);
 
-            double itemSize = Math.Max(14, _appearance.ItemSize * scale);
-            int directionCount = _appearance.ItemCount == 4 ? 4 : 8;
-            double radius = directionCount == 4 ? itemSize * 2.05 : itemSize * 1.95;
-            double plateRadius = radius + itemSize * 0.72;
+            // 缩放以适应预览区域。fit 系数由 WheelGeometry 按“该方向数真实的窗口尺寸”算出，
+            // 因此四向轮盘（窗口更大）也能完整显示，不会被裁掉一圈。
+            double fit = WheelGeometry.FitScaleFor(_appearance, directionCount, size);
+
+            var g = WheelGeometry.Compute(_appearance, directionCount, fit);
+            double itemSize = g.ItemSize;
+            double radius = g.Radius;
+            double plateRadius = g.PlateRadius;
 
             var background = BrushHelper.ParseColor(_appearance.BackgroundColor, Color.FromArgb(0xE6, 0x1A, 0x1A, 0x2E));
             var border = BrushHelper.ParseColor(_appearance.BorderColor, Color.FromRgb(0x4A, 0x9E, 0xFF));
@@ -115,7 +116,7 @@ namespace RadialLauncher.Views
                 var label = new TextBlock
                 {
                     Text = string.IsNullOrWhiteSpace(item.Icon) ? "●" : item.Icon,
-                    FontSize = Math.Max(9, itemSize * 0.34),
+                    FontSize = Math.Max(9, itemSize * WheelGeometry.IconFontFactor),
                     Foreground = new SolidColorBrush(textColor),
                     TextAlignment = TextAlignment.Center,
                     Width = itemSize,

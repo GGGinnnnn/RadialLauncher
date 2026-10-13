@@ -135,6 +135,13 @@ namespace RadialLauncher.Services
         /// <summary>把明显越界的值收敛到合法范围。</summary>
         public static void Normalize(AppConfig c)
         {
+            // 分组对象先兜底：config.json 里显式写了 "Appearance": null 时，
+            // 反序列化会得到 null，若直接访问字段会 NRE，被上层 catch 吞掉后
+            // 表现为“配置莫名其妙全没了”。
+            c.Appearance ??= new AppearanceSettings();
+            c.Trigger ??= new TriggerSettings();
+            c.System ??= new SystemSettings();
+
             c.SchemaVersion = 2;
 
             c.Appearance.ItemCount = c.Appearance.ItemCount == 4 ? 4 : 8;
@@ -162,6 +169,7 @@ namespace RadialLauncher.Services
             foreach (var item in c.WheelItems) NormalizeItem(item);
             foreach (var profile in c.Profiles)
             {
+                if (profile == null) continue;
                 profile.ProcessNames ??= new();
                 profile.TitleKeywords ??= new();
                 profile.Items ??= new();

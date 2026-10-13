@@ -197,6 +197,67 @@ public class BuiltinCatalogTests
 
         Assert.Equal(expected, categories);
     }
+
+    // ==================== Keys（id → 按键序列的唯一事实来源）====================
+
+    [Fact]
+    public void AllDefinedKeys_AreParsableByKeySequence()
+    {
+        // 回归护栏：以前 ActionExecutor 把内部 id（如 "VolumeUp"）当按键文本传给 KeySequence，
+        // 隐式依赖 Map 里有同名键。现在按键序列集中在目录里定义，必须逐条可解析。
+        foreach (var item in BuiltinCatalog.Items)
+        {
+            if (item.Keys == null) continue;
+
+            Assert.True(
+                KeySequence.TryParse(item.Keys, out _, out var error),
+                $"内置功能「{item.Id}」的按键「{item.Keys}」无法解析：{error}");
+        }
+    }
+
+    [Fact]
+    public void KeysFor_ReturnsKeysForShortcutBackedEntries()
+    {
+        Assert.Equal("Win+D", BuiltinCatalog.KeysFor("ShowDesktop"));
+        Assert.Equal("Win+E", BuiltinCatalog.KeysFor("OpenExplorer"));
+        Assert.Equal("VolumeUp", BuiltinCatalog.KeysFor("VolumeUp"));
+        Assert.Equal("PlayPause", BuiltinCatalog.KeysFor("PlayPause"));
+        Assert.Equal("Win+Shift+S", BuiltinCatalog.KeysFor("Screenshot"));
+    }
+
+    [Fact]
+    public void KeysFor_ReturnsNullForProcessBackedEntries()
+    {
+        // 这些功能由程序直接启进程 / 调 API，不走合成快捷键
+        Assert.Null(BuiltinCatalog.KeysFor("LockScreen"));
+        Assert.Null(BuiltinCatalog.KeysFor("Shutdown"));
+        Assert.Null(BuiltinCatalog.KeysFor("OpenTerminal"));
+        Assert.Null(BuiltinCatalog.KeysFor("OpenDataFolder"));
+    }
+
+    [Fact]
+    public void KeysFor_ReturnsNullForUnknownId()
+    {
+        Assert.Null(BuiltinCatalog.KeysFor("__NoSuchBuiltin__"));
+    }
+
+    [Fact]
+    public void AllMediaEntries_HaveKeysDefined()
+    {
+        // 媒体键必须全部在目录里配好，否则 ActionExecutor 会静默失败
+        string[] mediaIds =
+        {
+            "PlayPause", "NextTrack", "PrevTrack", "StopMedia",
+            "VolumeUp", "VolumeDown", "Mute",
+        };
+
+        foreach (var id in mediaIds)
+        {
+            var def = BuiltinCatalog.ById(id);
+            Assert.NotNull(def);
+            Assert.False(string.IsNullOrWhiteSpace(def!.Keys), $"媒体功能 {id} 缺少 Keys");
+        }
+    }
 }
 
 /// <summary>IconService.GuessExecutable 的路径推断逻辑。</summary>

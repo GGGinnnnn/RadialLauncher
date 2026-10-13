@@ -288,12 +288,6 @@ namespace RadialLauncher.Services
                     Directory.CreateDirectory(ConfigService.DataDirectory);
                     return RunShell("explorer.exe", $"\"{ConfigService.DataDirectory}\"");
 
-                case "ShowDesktop":
-                    return SendKeysOk("Win+D");
-
-                case "OpenExplorer":
-                    return SendKeysOk("Win+E");
-
                 case "OpenTerminal":
                     return OpenTerminal();
 
@@ -306,6 +300,9 @@ namespace RadialLauncher.Services
                 case "OpenDesktopDir":
                     return RunShell("explorer.exe", $"\"{Environment.GetFolderPath(Environment.SpecialFolder.DesktopDirectory)}\"");
 
+                // 依赖合成快捷键的功能统一查目录里的 Keys，避免把内部 id 当按键文本用。
+                case "ShowDesktop":
+                case "OpenExplorer":
                 case "PlayPause":
                 case "NextTrack":
                 case "PrevTrack":
@@ -313,26 +310,39 @@ namespace RadialLauncher.Services
                 case "VolumeUp":
                 case "VolumeDown":
                 case "Mute":
-                    return SendKeysOk(id);
-
                 case "Clipboard":
-                    return SendKeysOk("Win+V");
-
                 case "Screenshot":
-                    return SendKeysOk("Win+Shift+S");
-
                 case "EmojiPanel":
-                    return SendKeysOk("Win+.");
-
                 case "Search":
-                    return SendKeysOk("Win+S");
-
                 case "RunDialog":
-                    return SendKeysOk("Win+R");
+                    return SendBuiltinKeys(id);
 
                 default:
                     return ActionResult.Fail($"未知的内置功能：{id}");
             }
+        }
+
+        /// <summary>
+        /// 执行一个"靠合成快捷键"实现的内置功能。
+        /// 按键序列来自 <see cref="BuiltinCatalog"/>，保证 id 与按键文本的对应关系只有一处定义。
+        /// </summary>
+        private static ActionResult SendBuiltinKeys(string id)
+        {
+            var keys = BuiltinCatalog.KeysFor(id);
+            if (string.IsNullOrWhiteSpace(keys))
+            {
+                // 目录漏配了 Keys，或该功能标识有误。明确报错好过静默发一堆乱键。
+                Logger.Warn($"内置功能「{id}」在目录里没有定义按键序列");
+                return ActionResult.Fail($"内置功能未配置快捷键：{id}");
+            }
+
+            if (!KeySequence.SendText(keys, out var error))
+            {
+                Logger.Warn($"内置功能「{id}」的按键「{keys}」无法解析：{error}");
+                return ActionResult.Fail(string.Format(Loc.T("Msg_InvalidShortcut"), error));
+            }
+
+            return ActionResult.Ok();
         }
 
         private ActionResult OpenKnownFolder(Environment.SpecialFolder root, string sub)
@@ -373,14 +383,6 @@ namespace RadialLauncher.Services
             if (!string.IsNullOrWhiteSpace(arguments)) psi.Arguments = arguments;
 
             Process.Start(psi);
-            return ActionResult.Ok();
-        }
-
-        private ActionResult SendKeysOk(string keys)
-        {
-            if (!KeySequence.SendText(keys, out var error))
-                return ActionResult.Fail(string.Format(Loc.T("Msg_InvalidShortcut"), error));
-
             return ActionResult.Ok();
         }
 
