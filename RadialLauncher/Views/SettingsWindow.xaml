@@ -906,6 +906,21 @@
                                 </StackPanel>
                             </GroupBox>
 
+                            <GroupBox Header="{Binding [System_DataDirGroup], Source={x:Static services:Loc.Instance}}">
+                                <StackPanel>
+                                    <RadioButton x:Name="RbDataAppData" GroupName="DataDir"
+                                                 Content="{Binding [System_DataDirAppData], Source={x:Static services:Loc.Instance}}"/>
+                                    <RadioButton x:Name="RbDataPortable" GroupName="DataDir" Margin="0,8,0,0"
+                                                 Content="{Binding [System_DataDirPortable], Source={x:Static services:Loc.Instance}}"/>
+
+                                    <TextBlock x:Name="TxtDataDirCurrent" Margin="0,10,0,0"
+                                               Style="{StaticResource HintText}"/>
+
+                                    <TextBlock Margin="0,8,0,0" Style="{StaticResource HintText}"
+                                               Text="{Binding [System_DataDirHint], Source={x:Static services:Loc.Instance}}"/>
+                                </StackPanel>
+                            </GroupBox>
+
                             <GroupBox Header="{Binding [System_GitHub], Source={x:Static services:Loc.Instance}}">
                                 <StackPanel>
                                     <TextBox x:Name="TxtGitHub" FontFamily="{StaticResource MonoFontFamily}" FontSize="12.5"/>

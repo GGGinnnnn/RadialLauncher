@@ -188,6 +188,7 @@ namespace RadialLauncher.Views
                 TxtVersion.Text = "Radial Launcher " + GetVersionText();
                 TxtHeaderVersion.Text = GetVersionText();
                 SelectFontItem(c.System.UiFont);
+                UpdateDataDirNote();
             }
             finally
             {
@@ -1365,6 +1366,62 @@ namespace RadialLauncher.Views
             ToastWindow.Show(Loc.T("System_Reset"), Loc.T("System_ResetDone"));
         }
 
+        // ==================== 数据目录 ====================
+
+        /// <summary>
+        /// 刷新「数据目录」一栏：显示当前真实生效的路径，单选按钮反映
+        /// “下次启动会用哪个目录”——也就是便携标记文件的状态。
+        /// </summary>
+        private void UpdateDataDirNote()
+        {
+            TxtDataDirCurrent.Text = AppPaths.IsEnvironmentOverrideActive
+                ? string.Format(Loc.T("System_DataDirEnvOverride"), ConfigService.DataDirectory)
+                : string.Format(Loc.T("System_DataDirCurrent"), ConfigService.DataDirectory);
+
+            bool portable = AppPaths.Mode == DataDirectoryMode.Portable;
+            RbDataPortable.IsChecked = portable;
+            RbDataAppData.IsChecked = !portable;
+        }
+
+        /// <summary>
+        /// 把界面上选的数据目录真正落下去（迁移文件 + 落/清标记 + 切换进程内目录）。
+        /// 返回 false 表示切换失败，调用方必须中止关闭窗口，让用户看到问题。
+        /// </summary>
+        private bool ApplyDataDirectoryChoice()
+        {
+            // 被环境变量硬覆盖时界面上的选择没有意义（提示文字里已经说明了）
+            if (AppPaths.IsEnvironmentOverrideActive) return true;
+
+            var wanted = RbDataPortable.IsChecked == true
+                ? DataDirectoryMode.Portable
+                : DataDirectoryMode.AppData;
+
+            if (wanted == AppPaths.Mode) return true;
+
+            var result = AppPaths.SwitchTo(wanted);
+            if (result.Success)
+            {
+                if (!result.AlreadyInMode)
+                {
+                    ToastWindow.Show(Loc.T("System_DataDirSwitchedTitle"),
+                        string.Format(Loc.T("System_DataDirSwitchedBody"),
+                            result.FilesCopied, result.TargetDirectory));
+                }
+                return true;
+            }
+
+            var label = wanted == DataDirectoryMode.Portable
+                ? Loc.T("System_DataDirPortable")
+                : Loc.T("System_DataDirAppData");
+
+            MessageBox.Show(
+                string.Format(Loc.T("System_DataDirFailedBody"), label, result.Error ?? ""),
+                Loc.T("System_DataDirFailedTitle"),
+                MessageBoxButton.OK, MessageBoxImage.Warning);
+
+            return false;
+        }
+
         // ============================================================
         //  关于页
         // ============================================================
@@ -1400,7 +1457,13 @@ namespace RadialLauncher.Views
         private void OnSaveAndClose(object sender, RoutedEventArgs e)
         {
             SaveAll();
+
+            // 先把这份最新配置落到当前目录，切换数据目录时才会把它一起带过去
             _configService.Replace(_working);
+
+            // 切换失败就别关面板：否则用户看不到失败原因，还以为设置成功了
+            if (!ApplyDataDirectoryChoice()) return;
+
             _host.ApplyConfig();
             ConfigAppliedOnClose = true;
             Close();

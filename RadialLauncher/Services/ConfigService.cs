@@ -7,7 +7,8 @@ using RadialLauncher.Models;
 namespace RadialLauncher.Services
 {
     /// <summary>
-    /// 配置读写。文件位于 %AppData%\RadialLauncher\config.json。
+    /// 配置读写。文件位于数据目录下的 config.json（默认 %AppData%\RadialLauncher，
+    /// 也可切到 exe 同级目录 —— 见 <see cref="AppPaths"/>）。
     /// 支持从 v1（平铺字段）自动迁移到 v2（分组字段）。
     /// </summary>
     public sealed class ConfigService
@@ -18,15 +19,14 @@ namespace RadialLauncher.Services
             DefaultIgnoreCondition = JsonIgnoreCondition.Never,
         };
 
-        /// <summary>覆盖数据目录的环境变量名。</summary>
-        private const string DataDirectoryEnvVar = "RADIALLAUNCHER_DATA_DIR";
-
-        private static string _dataDirectory = ResolveDefaultDataDirectory();
+        // 默认目录不在这里自己拼：统一由 AppPaths 裁决，否则和 Logger 各写一份，
+        // 迟早会出现“配置在新目录、日志还在旧目录”这种对不上的情况。
+        private static string _dataDirectory = AppPaths.ResolveDataDirectory();
 
         /// <summary>
-        /// 配置所在目录。默认 %AppData%\RadialLauncher，可用环境变量
-        /// RADIALLAUNCHER_DATA_DIR 覆盖，也可以直接赋值重定向 ——
-        /// 单元测试把它指到临时目录，就不会再读写用户真实的 config.json。
+        /// 配置所在目录。默认取自 <see cref="AppPaths.ResolveDataDirectory"/>，
+        /// 也可以直接赋值重定向 —— 单元测试把它指到临时目录，
+        /// 就不会再读写用户真实的 config.json。
         /// </summary>
         public static string DataDirectory
         {
@@ -37,23 +37,6 @@ namespace RadialLauncher.Services
                     throw new ArgumentException("数据目录不能为空", nameof(value));
                 _dataDirectory = value;
             }
-        }
-
-        private static string ResolveDefaultDataDirectory()
-        {
-            try
-            {
-                var raw = Environment.GetEnvironmentVariable(DataDirectoryEnvVar);
-                if (!string.IsNullOrWhiteSpace(raw)) return raw.Trim();
-            }
-            catch
-            {
-                // 读环境变量失败就退回默认目录
-            }
-
-            return Path.Combine(
-                Environment.GetFolderPath(Environment.SpecialFolder.ApplicationData),
-                "RadialLauncher");
         }
 
         public static string ConfigPath => Path.Combine(DataDirectory, "config.json");

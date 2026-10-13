@@ -3,7 +3,8 @@ using System.Collections.Generic;
 namespace RadialLauncher.Models
 {
     /// <summary>
-    /// 应用全部可持久化配置。保存在 %AppData%\RadialLauncher\config.json
+    /// 应用全部可持久化配置。保存在数据目录下的 config.json
+    /// （默认 %AppData%\RadialLauncher，可切到 exe 同级目录 —— 见 AppPaths）。
     /// </summary>
     public class AppConfig
     {

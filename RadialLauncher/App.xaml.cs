@@ -100,6 +100,11 @@ namespace RadialLauncher
             Logger.Info("================ Radial Launcher 启动 ================");
             Logger.Info($"版本 {typeof(App).Assembly.GetName().Version}，管理员={ElevationService.IsElevated}");
 
+            // 数据目录是排障第一现场（配置丢了、日志找不到时先看这行）
+            Logger.Info(AppPaths.IsEnvironmentOverrideActive
+                ? $"数据目录：{ConfigService.DataDirectory}（被 {AppPaths.DataDirectoryEnvVar} 覆盖）"
+                : $"数据目录：{ConfigService.DataDirectory}（模式：{AppPaths.DescribeMode(AppPaths.Mode)}）");
+
             // ---- 配置 ----
             var configService = new ConfigService();
             configService.Load();

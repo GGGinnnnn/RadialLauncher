@@ -252,6 +252,18 @@ namespace RadialLauncher.Services
             ["System_ResetConfirm"] = "将清除全部设置（包含应用专属轮盘），确定继续吗？",
             ["System_ResetDone"] = "已恢复出厂设置。",
 
+            // 数据目录
+            ["System_DataDirGroup"] = "数据目录",
+            ["System_DataDirAppData"] = "使用 %AppData%\\RadialLauncher（推荐）",
+            ["System_DataDirPortable"] = "使用程序所在目录（便携 / 绿色版）",
+            ["System_DataDirHint"] = "配置、日志与托盘图标都保存在这里。便携模式下所有文件都留在程序目录内，整个文件夹拷贝到 U 盘即可带走全部设置；程序安装在 Program Files 等受保护目录时请改用 %AppData%。切换会把现有文件复制过去（原目录保留），并立即生效。",
+            ["System_DataDirCurrent"] = "当前生效：{0}",
+            ["System_DataDirEnvOverride"] = "当前生效：{0} —— 已被环境变量 RADIALLAUNCHER_DATA_DIR 覆盖，下面的选择不会生效。",
+            ["System_DataDirSwitchedTitle"] = "数据目录已切换",
+            ["System_DataDirSwitchedBody"] = "已迁移 {0} 个文件到\n{1}",
+            ["System_DataDirFailedTitle"] = "切换数据目录失败",
+            ["System_DataDirFailedBody"] = "无法使用「{0}」：\n{1}",
+
             // 关于
             ["About_Version"] = "版本",
             ["About_Log"] = "运行日志",
@@ -488,6 +500,18 @@ namespace RadialLauncher.Services
             ["System_Reset"] = "Factory reset",
             ["System_ResetConfirm"] = "This clears every setting (including app profiles). Continue?",
             ["System_ResetDone"] = "Settings restored to defaults.",
+
+            // Data folder
+            ["System_DataDirGroup"] = "Data folder",
+            ["System_DataDirAppData"] = "Use %AppData%\\RadialLauncher (recommended)",
+            ["System_DataDirPortable"] = "Use the program's own folder (portable)",
+            ["System_DataDirHint"] = "Config, logs and the tray icon are stored here. In portable mode everything stays inside the program folder, so the whole folder can be carried on a USB stick. If the app lives under a protected location such as Program Files, prefer %AppData%. Switching copies the existing files over (the old folder is kept) and takes effect immediately.",
+            ["System_DataDirCurrent"] = "In effect: {0}",
+            ["System_DataDirEnvOverride"] = "In effect: {0} — overridden by the RADIALLAUNCHER_DATA_DIR environment variable, so the choice below has no effect.",
+            ["System_DataDirSwitchedTitle"] = "Data folder changed",
+            ["System_DataDirSwitchedBody"] = "Copied {0} file(s) to\n{1}",
+            ["System_DataDirFailedTitle"] = "Could not change the data folder",
+            ["System_DataDirFailedBody"] = "Cannot use \"{0}\":\n{1}",
 
             // About
             ["About_Version"] = "Version",

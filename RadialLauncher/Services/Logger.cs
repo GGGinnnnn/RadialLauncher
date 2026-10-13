@@ -15,7 +15,8 @@ namespace RadialLauncher.Services
     }
 
     /// <summary>
-    /// 轻量日志。默认写入 %AppData%\RadialLauncher\RadialLauncher.log，超过 1MB 自动轮转。
+    /// 轻量日志。写入数据目录下的 RadialLauncher.log（默认 %AppData%\RadialLauncher，
+    /// 便携模式下为 exe 同级目录 —— 见 <see cref="AppPaths"/>），超过 1MB 自动轮转。
     ///
     /// 落盘在**后台线程**完成：调用方（很可能正是全局钩子所在的 UI 线程）只把日志行
     /// 塞进队列就立即返回，绝不做文件 I/O。原来是每次 File.AppendAllText（开→写→关）
@@ -25,9 +26,6 @@ namespace RadialLauncher.Services
     public static class Logger
     {
         private const long MaxBytes = 1024 * 1024;
-
-        /// <summary>覆盖日志目录的环境变量名，与 ConfigService 保持一致。</summary>
-        private const string DataDirectoryEnvVar = "RADIALLAUNCHER_DATA_DIR";
 
         /// <summary>待落盘的日志行。无界队列，写入方永不阻塞。</summary>
         private static readonly BlockingCollection<string> Pending =
@@ -66,11 +64,11 @@ namespace RadialLauncher.Services
             return LogLevel.Info;
         }
 
-        private static string _directoryPath = ResolveDefaultDirectory();
+        private static string _directoryPath = AppPaths.ResolveDataDirectory();
 
         /// <summary>
-        /// 日志目录。默认 %AppData%\RadialLauncher，可用环境变量 RADIALLAUNCHER_DATA_DIR
-        /// 覆盖，也可以直接赋值重定向 —— 单元测试把它指到临时目录，就不会污染真实日志。
+        /// 日志目录 —— 与配置目录始终同一个（由 <see cref="AppPaths"/> 统一裁决）。
+        /// 也可以直接赋值重定向：单元测试把它指到临时目录，就不会污染真实日志。
         /// </summary>
         public static string DirectoryPath
         {
@@ -88,23 +86,6 @@ namespace RadialLauncher.Services
                     _directoryPath = value;
                 }
             }
-        }
-
-        private static string ResolveDefaultDirectory()
-        {
-            try
-            {
-                var raw = Environment.GetEnvironmentVariable(DataDirectoryEnvVar);
-                if (!string.IsNullOrWhiteSpace(raw)) return raw.Trim();
-            }
-            catch
-            {
-                // 读环境变量失败就退回默认目录
-            }
-
-            return Path.Combine(
-                Environment.GetFolderPath(Environment.SpecialFolder.ApplicationData),
-                "RadialLauncher");
         }
 
         public static string LogPath => Path.Combine(DirectoryPath, "RadialLauncher.log");
