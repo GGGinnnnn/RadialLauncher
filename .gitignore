@@ -14,8 +14,16 @@ release/
 *.zip
 *.rar
 
+# ================= 测试 =================
+TestResults/
+*.trx
+*.coverage
+
 # ================= 其它 =================
 *.log
 *.tmp
 Thumbs.db
 desktop.ini
+
+# 本地 AI 助手记忆目录，不进版本库
+.workbuddy/

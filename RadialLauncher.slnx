@@ -1,3 +1,4 @@
 <Solution>
   <Project Path="RadialLauncher/RadialLauncher.csproj" />
+  <Project Path="RadialLauncher.Tests/RadialLauncher.Tests.csproj" />
 </Solution>
