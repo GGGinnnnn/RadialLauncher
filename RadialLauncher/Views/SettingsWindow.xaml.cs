@@ -65,6 +65,13 @@ namespace RadialLauncher.Views
         /// <summary>打开面板时的字体，取消时要还原。</summary>
         private readonly string _originalFont;
 
+        /// <summary>
+        /// 保存/取消时本窗口已经在关闭前应用过配置。宿主收到 Closed 后
+        /// 就不必再 ApplyConfig() 一次（否则每次关面板都会重复应用并重复打日志）。
+        /// 用户直接点标题栏关闭时该值为 false，宿主仍需应用一次以还原未保存的即时改动。
+        /// </summary>
+        public bool ConfigAppliedOnClose { get; private set; }
+
         public event System.ComponentModel.PropertyChangedEventHandler? PropertyChanged;
 
         /// <summary>侧边栏折叠时导航内容居中，展开时靠左（导航项模板里绑定）。</summary>
@@ -1377,6 +1384,7 @@ namespace RadialLauncher.Views
             try
             {
                 if (!System.IO.File.Exists(Logger.LogPath)) Logger.Info("（用户打开了日志）");
+                Logger.Flush();   // 日志现在是异步落盘，先确保文件已经写出来
                 Process.Start(new ProcessStartInfo(Logger.LogPath) { UseShellExecute = true });
             }
             catch (Exception ex)
@@ -1394,6 +1402,7 @@ namespace RadialLauncher.Views
             SaveAll();
             _configService.Replace(_working);
             _host.ApplyConfig();
+            ConfigAppliedOnClose = true;
             Close();
         }
 
@@ -1403,6 +1412,7 @@ namespace RadialLauncher.Views
             Loc.Instance.SetLanguage(_originalLanguage);
             ThemeManager.ApplyUiFont(_originalFont);
             _host.ApplyConfig();
+            ConfigAppliedOnClose = true;
             Close();
         }
 

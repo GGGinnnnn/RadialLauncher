@@ -1,15 +1,14 @@
+using System.IO;
 using RadialLauncher.Services;
 using Xunit;
 
 namespace RadialLauncher.Tests;
 
 /// <summary>
-/// Logger 的可测部分：级别过滤、消息格式、事件。
+/// Logger 的可测部分：级别过滤、消息格式、路径。
 ///
-/// 注意：Logger 的日志路径是写死的 %AppData%\RadialLauncher，无法重定向，
-/// 因此这里刻意只测“被 MinLevel 拦下、不触盘”的路径。
-/// 真正写文件的路径会污染用户的真实 AppData，不适合放进单元测试。
-/// 这也是一个可测试性缺口 —— 若日后把路径改成可注入，就能补上落盘测试。
+/// 日志目录已可重定向（见 TestEnvironment）：测试进程统一指到临时目录，
+/// 因此这里可以安全地做“改目录 → 落盘 → 读回”的验证，不会再污染用户真实日志。
 /// </summary>
 public class LoggerTests : IDisposable
 {
@@ -73,10 +72,32 @@ public class LoggerTests : IDisposable
     // ==================== 日志路径 ====================
 
     [Fact]
-    public void DirectoryPath_IsUnderAppData()
+    public void DirectoryPath_IsRedirectable()
     {
-        var appData = Environment.GetFolderPath(Environment.SpecialFolder.ApplicationData);
-        Assert.StartsWith(appData, Logger.DirectoryPath, StringComparison.OrdinalIgnoreCase);
+        var original = Logger.DirectoryPath;
+        var custom = Path.Combine(Path.GetTempPath(), "RadialLauncher.Tests-redirect-" + Guid.NewGuid().ToString("N"));
+
+        try
+        {
+            Logger.DirectoryPath = custom;
+
+            Assert.Equal(custom, Logger.DirectoryPath);
+            Assert.Equal(Path.Combine(custom, "RadialLauncher.log"), Logger.LogPath);
+        }
+        finally
+        {
+            Logger.DirectoryPath = original;
+        }
+    }
+
+    [Fact]
+    public void DirectoryPath_RejectsBlankValue()
+    {
+        var original = Logger.DirectoryPath;
+
+        // 空目录名没有任何意义，必须当场拒绝，而不是让后面写日志时静默失败
+        Assert.Throws<ArgumentException>(() => Logger.DirectoryPath = "   ");
+        Assert.Equal(original, Logger.DirectoryPath);
     }
 
     [Fact]
@@ -90,6 +111,62 @@ public class LoggerTests : IDisposable
     public void LogPath_UsesExpectedFileName()
     {
         Assert.EndsWith("RadialLauncher.log", Logger.LogPath, StringComparison.OrdinalIgnoreCase);
+    }
+
+    // ==================== 异步落盘 ====================
+
+    private static string NewTempDir() => Path.Combine(
+        Path.GetTempPath(), "RadialLauncher.Tests-log-" + Guid.NewGuid().ToString("N"));
+
+    [Fact]
+    public void Write_ThenFlush_PersistsToFile()
+    {
+        var originalDir = Logger.DirectoryPath;
+        var originalLevel = Logger.MinLevel;
+        var dir = NewTempDir();
+
+        try
+        {
+            Logger.DirectoryPath = dir;
+            Logger.MinLevel = LogLevel.Info;
+
+            Logger.Info("落盘标记-12345");
+            Logger.Flush();
+
+            Assert.True(File.Exists(Logger.LogPath));
+            Assert.Contains("落盘标记-12345", Logger.ReadTail(50));
+        }
+        finally
+        {
+            Logger.DirectoryPath = originalDir;   // 先放掉文件句柄，才能删目录
+            Logger.MinLevel = originalLevel;
+            try { if (Directory.Exists(dir)) Directory.Delete(dir, true); } catch { }
+        }
+    }
+
+    [Fact]
+    public void Clear_RemovesLogFile()
+    {
+        var originalDir = Logger.DirectoryPath;
+        var dir = NewTempDir();
+
+        try
+        {
+            Logger.DirectoryPath = dir;
+            Logger.MinLevel = LogLevel.Info;
+
+            Logger.Info("即将被清空");
+            Logger.Flush();
+            Assert.True(File.Exists(Logger.LogPath));
+
+            Logger.Clear();
+            Assert.False(File.Exists(Logger.LogPath));
+        }
+        finally
+        {
+            Logger.DirectoryPath = originalDir;
+            try { if (Directory.Exists(dir)) Directory.Delete(dir, true); } catch { }
+        }
     }
 
     // ==================== 枚举语义 ====================

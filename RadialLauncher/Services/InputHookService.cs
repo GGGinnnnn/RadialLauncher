@@ -166,6 +166,27 @@ namespace RadialLauncher.Services
             Post(() => Logger.Warn($"钩子回调（{which}）耗时 {elapsed:0.0} ms，超过 {SlowHookWarnMs:0} ms 阈值"));
         }
 
+        /// <summary>把鼠标消息号写成人看的名字，让慢回调告警能直接定位到具体事件。</summary>
+        private static string DescribeMouseMessage(int msg) => msg switch
+        {
+            NativeMethods.WM_MOUSEMOVE => "WM_MOUSEMOVE",
+            NativeMethods.WM_MBUTTONDOWN => "WM_MBUTTONDOWN",
+            NativeMethods.WM_MBUTTONUP => "WM_MBUTTONUP",
+            NativeMethods.WM_LBUTTONDOWN => "WM_LBUTTONDOWN",
+            NativeMethods.WM_RBUTTONDOWN => "WM_RBUTTONDOWN",
+            _ => "msg=" + msg,
+        };
+
+        /// <summary>把键盘消息号写成人看的名字（只区分按下/松开，够定位了）。</summary>
+        private static string DescribeKeyboardMessage(int msg) => msg switch
+        {
+            NativeMethods.WM_KEYDOWN => "WM_KEYDOWN",
+            NativeMethods.WM_SYSKEYDOWN => "WM_SYSKEYDOWN",
+            NativeMethods.WM_KEYUP => "WM_KEYUP",
+            NativeMethods.WM_SYSKEYUP => "WM_SYSKEYUP",
+            _ => "msg=" + msg,
+        };
+
         /// <summary>把 Stopwatch 时间戳换算成毫秒。</summary>
         private static double TicksToMs(long ticks)
             => ticks * 1000.0 / Stopwatch.Frequency;
@@ -232,10 +253,11 @@ namespace RadialLauncher.Services
 
             bool swallow = false;
             long start = Stopwatch.GetTimestamp();
+            int msg = 0;   // 提前声明：finally 里的慢回调告警要带上它
 
             try
             {
-                int msg = wParam.ToInt32();
+                msg = wParam.ToInt32();
                 bool isDown = msg == NativeMethods.WM_KEYDOWN || msg == NativeMethods.WM_SYSKEYDOWN;
                 bool isUp = msg == NativeMethods.WM_KEYUP || msg == NativeMethods.WM_SYSKEYUP;
 
@@ -297,7 +319,8 @@ namespace RadialLauncher.Services
             }
             finally
             {
-                ReportSlowHook(TicksToMs(Stopwatch.GetTimestamp() - start), "键盘");
+                ReportSlowHook(TicksToMs(Stopwatch.GetTimestamp() - start),
+                    "键盘 " + DescribeKeyboardMessage(msg));
             }
 
             return swallow
@@ -313,10 +336,11 @@ namespace RadialLauncher.Services
 
             bool swallow = false;
             long start = Stopwatch.GetTimestamp();
+            int msg = 0;   // 提前声明：finally 里的慢回调告警要带上它
 
             try
             {
-                int msg = wParam.ToInt32();
+                msg = wParam.ToInt32();
                 var data = Marshal.PtrToStructure<NativeMethods.MSLLHOOKSTRUCT>(lParam);
 
                 // 同上：只过滤自己合成的鼠标事件
@@ -373,7 +397,8 @@ namespace RadialLauncher.Services
             }
             finally
             {
-                ReportSlowHook(TicksToMs(Stopwatch.GetTimestamp() - start), "鼠标");
+                ReportSlowHook(TicksToMs(Stopwatch.GetTimestamp() - start),
+                    "鼠标 " + DescribeMouseMessage(msg));
             }
 
             return swallow

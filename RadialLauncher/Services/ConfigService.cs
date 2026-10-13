@@ -18,11 +18,45 @@ namespace RadialLauncher.Services
             DefaultIgnoreCondition = JsonIgnoreCondition.Never,
         };
 
-        public static string DataDirectory { get; } = Path.Combine(
-            Environment.GetFolderPath(Environment.SpecialFolder.ApplicationData),
-            "RadialLauncher");
+        /// <summary>覆盖数据目录的环境变量名。</summary>
+        private const string DataDirectoryEnvVar = "RADIALLAUNCHER_DATA_DIR";
 
-        public static string ConfigPath { get; } = Path.Combine(DataDirectory, "config.json");
+        private static string _dataDirectory = ResolveDefaultDataDirectory();
+
+        /// <summary>
+        /// 配置所在目录。默认 %AppData%\RadialLauncher，可用环境变量
+        /// RADIALLAUNCHER_DATA_DIR 覆盖，也可以直接赋值重定向 ——
+        /// 单元测试把它指到临时目录，就不会再读写用户真实的 config.json。
+        /// </summary>
+        public static string DataDirectory
+        {
+            get => _dataDirectory;
+            set
+            {
+                if (string.IsNullOrWhiteSpace(value))
+                    throw new ArgumentException("数据目录不能为空", nameof(value));
+                _dataDirectory = value;
+            }
+        }
+
+        private static string ResolveDefaultDataDirectory()
+        {
+            try
+            {
+                var raw = Environment.GetEnvironmentVariable(DataDirectoryEnvVar);
+                if (!string.IsNullOrWhiteSpace(raw)) return raw.Trim();
+            }
+            catch
+            {
+                // 读环境变量失败就退回默认目录
+            }
+
+            return Path.Combine(
+                Environment.GetFolderPath(Environment.SpecialFolder.ApplicationData),
+                "RadialLauncher");
+        }
+
+        public static string ConfigPath => Path.Combine(DataDirectory, "config.json");
 
         private static string BackupPath => Path.Combine(DataDirectory, "config.backup.json");
 
@@ -56,7 +90,14 @@ namespace RadialLauncher.Services
                 // 所以以“有没有 Trigger 分组”作为主要判据。
                 if (LooksLikeLegacy(json) || loaded.SchemaVersion < 2)
                 {
-                    Logger.Info($"检测到旧版配置（v{loaded.SchemaVersion}），开始迁移");
+                    // 不能用 loaded.SchemaVersion 打日志：它是反序列化后的属性默认值(2)，
+                    // 而 v1 文件里根本没有这个键，照它打印会把版本号永远说成 v2。
+                    // 要拿真实版本只能回到 JSON 里看有没有这个字段，没有就按 v1 处理。
+                    int? declaredVersion = ReadSchemaVersion(json);
+                    Logger.Info(declaredVersion is int v
+                        ? $"检测到旧版配置（v{v}），开始迁移"
+                        : "检测到旧版扁平配置（无 SchemaVersion 字段，按 v1 处理），开始迁移");
+
                     loaded = Migrate(json, loaded);
                     Config = loaded;
                     Save();
@@ -70,9 +111,21 @@ namespace RadialLauncher.Services
             }
             catch (Exception ex)
             {
-                Logger.Error("读取配置失败，回退到默认配置", ex);
+                Logger.Error("读取配置失败，尝试从备份恢复", ex);
+
+                // 先把坏文件留一份取证（此刻 config.json 还是坏内容）
                 TryBackupCorruptFile();
+
+                // Save() 每次都会把上一版配置留在 config.backup.json 里，
+                // 这里正好拿它兜底 —— 比直接重置回默认配置对用户友好得多。
+                if (TryRestoreFromBackup())
+                {
+                    Logger.Warn("已从 config.backup.json 恢复损坏的配置");
+                    return;
+                }
+
                 Config = new AppConfig();
+                Logger.Warn("没有可用的配置备份，已回退到默认配置");
             }
         }
 
@@ -209,6 +262,53 @@ namespace RadialLauncher.Services
             catch { }
         }
 
+        /// <summary>
+        /// 读取 config.backup.json 并作为当前配置落盘。
+        /// 返回是否恢复成功（文件不存在或内容也坏了就返回 false）。
+        /// </summary>
+        private bool TryRestoreFromBackup()
+        {
+            try
+            {
+                if (!File.Exists(BackupPath)) return false;
+
+                var json = File.ReadAllText(BackupPath);
+                var restored = JsonSerializer.Deserialize<AppConfig>(json, JsonOptions);
+                if (restored == null) return false;
+
+                Config = restored;
+                Normalize(Config);
+                Save();
+                return true;
+            }
+            catch (Exception ex)
+            {
+                Logger.Warn("从 config.backup.json 恢复失败：" + ex.Message);
+                return false;
+            }
+        }
+
+        /// <summary>读取 JSON 根节点里声明的 SchemaVersion；v1 没有这个字段，返回 null。</summary>
+        private static int? ReadSchemaVersion(string json)
+        {
+            try
+            {
+                using var doc = JsonDocument.Parse(json);
+                if (doc.RootElement.ValueKind == JsonValueKind.Object &&
+                    doc.RootElement.TryGetProperty("SchemaVersion", out var value) &&
+                    value.TryGetInt32(out var version))
+                {
+                    return version;
+                }
+            }
+            catch
+            {
+                // 解析不了就当没有版本号
+            }
+
+            return null;
+        }
+
         // ==================== v1 → v2 迁移 ====================
 
         /// <summary>v1 的配置是平铺字段，没有 Trigger / Appearance 这些分组对象。</summary>
@@ -247,12 +347,20 @@ namespace RadialLauncher.Services
 
         private static AppConfig Migrate(string json, AppConfig alreadyParsed)
         {
-            var result = new AppConfig();
+            // 以“已解析结果”为基底，而不是全默认值：alreadyParsed 可能已经带上了
+            // JSON 里存在的 v2 字段（WheelItems / Profiles / Environment…），
+            // 再用 v1 的扁平字段逐项覆盖。这样即便迁移中途失败，也只是少迁移一点，
+            // 绝不会把用户的配色、功能项、应用专属配置整体丢成默认值。
+            var result = Clone(alreadyParsed);
 
             try
             {
+                result.Appearance ??= new AppearanceSettings();
+                result.Trigger ??= new TriggerSettings();
+                result.Environment ??= new EnvironmentSettings();
+
                 var legacy = JsonSerializer.Deserialize<LegacyConfig>(json, JsonOptions);
-                if (legacy == null) return alreadyParsed;
+                if (legacy == null) return result;
 
                 result.Environment.UseWhitelist = legacy.UseWhitelist;
                 result.Environment.WhitelistProcesses = legacy.WhitelistProcesses ?? new();
@@ -279,11 +387,26 @@ namespace RadialLauncher.Services
             }
             catch (Exception ex)
             {
-                Logger.Error("迁移旧配置失败，改用默认配置", ex);
+                // 失败也保留已解析的内容，绝不再把用户配置换成一份默认值
+                Logger.Error("迁移旧配置失败，保留已解析的配置内容", ex);
                 return result;
             }
 
             return result;
+        }
+
+        /// <summary>JSON 往返做一次深拷贝；失败时退回一份默认配置。</summary>
+        private static AppConfig Clone(AppConfig config)
+        {
+            try
+            {
+                var json = JsonSerializer.Serialize(config, JsonOptions);
+                return JsonSerializer.Deserialize<AppConfig>(json, JsonOptions) ?? new AppConfig();
+            }
+            catch
+            {
+                return new AppConfig();
+            }
         }
 
         /// <summary>旧版用枚举名表示快捷键，新版统一用按键序列。</summary>

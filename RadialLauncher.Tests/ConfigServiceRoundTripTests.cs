@@ -8,9 +8,9 @@ namespace RadialLauncher.Tests;
 /// <summary>
 /// ConfigService 的落盘往返测试。
 ///
-/// ConfigService.DataDirectory 是写死的 %AppData%\RadialLauncher，无法重定向，
-/// 所以整个类共享一个 fixture：先把用户真实的 config.json 备份到内存，
-/// 所有用例跑完后再原样写回，避免污染用户环境。
+/// ConfigService.DataDirectory 已经可重定向（见 TestEnvironment），测试进程统一
+/// 指到临时目录，所以这里读写的是临时文件，不会碰用户真实的 config.json。
+/// 同一目录被多个用例共享，因此整个类串行执行，并在 Dispose 里还原现场。
 /// </summary>
 [CollectionDefinition("ConfigServiceSerial", DisableParallelization = true)]
 public class ConfigServiceSerialCollection { }
@@ -186,6 +186,57 @@ public class ConfigServiceRoundTripTests : IDisposable
     }
 
     // ==================== Load 容错 ====================
+
+    [Fact]
+    public void DataDirectory_IsRedirectable()
+    {
+        var original = ConfigService.DataDirectory;
+        var custom = Path.Combine(Path.GetTempPath(), "RadialLauncher.Tests-dir-" + Guid.NewGuid().ToString("N"));
+
+        try
+        {
+            ConfigService.DataDirectory = custom;
+
+            Assert.Equal(custom, ConfigService.DataDirectory);
+            Assert.Equal(Path.Combine(custom, "config.json"), ConfigService.ConfigPath);
+        }
+        finally
+        {
+            ConfigService.DataDirectory = original;
+        }
+    }
+
+    [Fact]
+    public void DataDirectory_RejectsBlankValue()
+    {
+        var original = ConfigService.DataDirectory;
+
+        Assert.Throws<ArgumentException>(() => ConfigService.DataDirectory = "  ");
+        Assert.Equal(original, ConfigService.DataDirectory);
+    }
+
+    [Fact]
+    public void Load_CorruptJsonRecoversFromBackup()
+    {
+        // 先让磁盘上出现一份 config.backup.json：两次 Save 会把上一版留在备份里
+        DeleteIfExists(ConfigService.ConfigPath);
+        DeleteIfExists(BackupPath);
+
+        var service = new ConfigService();
+        service.Config.Appearance.ItemCount = 4;      // 4 是备份里的特征值（默认是 8）
+        service.Save();                                // 第 1 次写入
+        service.Config.System.Language = "en";
+        service.Save();                                // 第 2 次：backup 里是 ItemCount=4 那一版
+
+        // 把主配置写坏
+        File.WriteAllText(ConfigService.ConfigPath, "{ 坏掉的配置 ");
+
+        var reloaded = new ConfigService();
+        reloaded.Load();
+
+        // 不应回落到默认值（ItemCount=8），而应从备份恢复出 4
+        Assert.Equal(4, reloaded.Config.Appearance.ItemCount);
+    }
 
     [Fact]
     public void Load_CorruptJsonFallsBackToDefaults()

@@ -429,13 +429,16 @@ namespace RadialLauncher
             // 设置面板打开期间暂停全局钩子，避免在文本框里敲字被拦截
             _hook.Pause();
 
-            _settings = new SettingsWindow(this);
-            _settings.Closed += (_, _) =>
+            var settings = new SettingsWindow(this);
+            _settings = settings;
+            settings.Closed += (_, _) =>
             {
                 _hook.Resume();
-                ApplyConfig();
+
+                // 保存/取消路径已在关闭前应用过配置，这里只兜底“直接点 X 关闭”的情况
+                if (!settings.ConfigAppliedOnClose) ApplyConfig();
             };
-            _settings.Show();
+            settings.Show();
         }
 
         private void TestWheelClick(object sender, RoutedEventArgs e) => TestWheel(_configService.Config);
@@ -476,6 +479,7 @@ namespace RadialLauncher
             try
             {
                 if (!System.IO.File.Exists(Logger.LogPath)) Logger.Info("日志窗口被打开");
+                Logger.Flush();   // 日志现在是异步落盘，先确保文件已经写出来
                 Process.Start(new ProcessStartInfo(Logger.LogPath) { UseShellExecute = true });
             }
             catch (Exception ex)
