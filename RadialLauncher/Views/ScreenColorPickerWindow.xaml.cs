@@ -70,6 +70,7 @@ namespace RadialLauncher.Views
 
         private bool _leftWasDown;
         private bool _rightWasDown;
+        private bool _escWasDown;
 
         public Color SelectedColor { get; private set; } = Colors.White;
 
@@ -190,9 +191,12 @@ namespace RadialLauncher.Views
             }
             _leftWasDown = leftDown;
 
-            // 右键 / Esc 取消
+            // 右键 / Esc 取消。
+            // 三个键都用边沿检测（"本次按下"而非"当前按着"）：电平检测会在按住不放时
+            // 每个 20ms 的 tick 都重复触发一次取消，语义和左键也不一致。
             bool rightDown = IsDown(NativeMethods.VK_RBUTTON);
-            if ((rightDown && !_rightWasDown) || IsDown(NativeMethods.VK_ESCAPE))
+            bool escDown = IsDown(NativeMethods.VK_ESCAPE);
+            if ((rightDown && !_rightWasDown) || (escDown && !_escWasDown))
             {
                 _timer.Stop();
                 DialogResult = false;
@@ -200,6 +204,7 @@ namespace RadialLauncher.Views
                 return;
             }
             _rightWasDown = rightDown;
+            _escWasDown = escDown;
         }
 
         private static bool IsDown(int vk) => (GetAsyncKeyState(vk) & 0x8000) != 0;

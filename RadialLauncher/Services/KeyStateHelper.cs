@@ -1,12 +1,10 @@
-using System;
 using System.Collections.Generic;
 using System.Runtime.InteropServices;
-using System.Threading;
 
 namespace RadialLauncher.Services
 {
     /// <summary>
-    /// 查询 / 等待修饰键状态。
+    /// 查询修饰键状态 + 必要时强制释放。
     ///
     /// 存在的意义：轮盘是“按住触发键唤出、松开触发键执行”的，
     /// 而触发键本身往往就是修饰键（Ctrl / Win）。
@@ -58,38 +56,41 @@ namespace RadialLauncher.Services
         }
 
         /// <summary>
-        /// 等到所有修饰键都抬起来（最多等 maxMs 毫秒），返回实际等待的毫秒数。
-        /// 通常一次就过，返回值是 0。
+        /// 强制补发所有当前仍按着的修饰键“松开”。
         ///
-        /// <para><b>调用约束：不要在 UI 线程直接调用。</b>
-        /// 这是同步阻塞等待，最坏情况会占用调用线程 <paramref name="maxMs"/> 毫秒。
-        /// 在 UI 线程调用会导致界面短暂无响应（表现为轮盘收起时"卡一下"）。
-        /// 目前唯一的生产调用点在钩子回调里（独立的钩子线程）——
-        /// <c>MainWindow</c> 另有一条 <c>DispatcherTimer</c> 的异步兜底路径，
-        /// 若将来需要从 UI 侧等待，请走那条路径而不是直接调用本方法。</para>
+        /// 用途：等待修饰键抬起的兜底路径超时后调用。此时用户的物理按键状态表
+        /// 已经和真实意图不同步（例如松开被系统延迟上报），与其带着残留修饰键去合成
+        /// 快捷键（Win+V 会变成 Ctrl+Win+V），不如主动把它们抬起来，让这一次执行
+        /// 的结果是确定的。补发后由 <see cref="AnyModifierDown"/> 复核返回值即可。
         /// </summary>
-        public static int WaitForModifiersReleased(int maxMs = 250)
+        /// <returns>补发过松开的修饰键名称；都没补发则返回空列表。</returns>
+        public static IReadOnlyList<string> ForceReleaseAllDown()
         {
-            if (maxMs < 0) maxMs = 0;
-            if (!AnyModifierDown()) return 0;
+            var released = new List<string>();
 
-            long start = Environment.TickCount64;
-
-            // SpinWait 在自旋若干次后会自行升级为 Sleep(1)/yield，
-            // 比手写 Thread.Sleep(0)/Sleep(1) 更贴合 CPU 情况，
-            // 也不会在单核机器上把整个调度周期空转掉。
-            var spin = new SpinWait();
-
-            while (true)
+            void Release(string name, params int[] vks)
             {
-                if (!AnyModifierDown()) break;
+                // 只要泛键或任一侧键仍按着，就把它们全部抬起（重复 KeyUp 无害）。
+                bool down = false;
+                foreach (var vk in vks)
+                {
+                    if (IsDown(vk)) { down = true; break; }
+                }
+                if (!down) return;
 
-                if (Environment.TickCount64 - start >= maxMs) break;
-
-                spin.SpinOnce();
+                foreach (var vk in vks)
+                {
+                    KeySequence.KeyUp(vk);
+                }
+                released.Add(name);
             }
 
-            return (int)(Environment.TickCount64 - start);
+            Release("Ctrl", NativeMethods.VK_CONTROL, NativeMethods.VK_LCONTROL, NativeMethods.VK_RCONTROL);
+            Release("Shift", NativeMethods.VK_SHIFT, NativeMethods.VK_LSHIFT, NativeMethods.VK_RSHIFT);
+            Release("Alt", NativeMethods.VK_MENU, NativeMethods.VK_LMENU, NativeMethods.VK_RMENU);
+            Release("Win", NativeMethods.VK_LWIN, NativeMethods.VK_RWIN);
+
+            return released;
         }
     }
 }

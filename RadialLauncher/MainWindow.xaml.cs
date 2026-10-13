@@ -202,10 +202,6 @@ namespace RadialLauncher
             Logger.Info("配置已应用");
         }
 
-        public void PauseHook() => _hook.Pause();
-
-        public void ResumeHook() => _hook.Resume();
-
         public void OpenDataFolder()
         {
             try
@@ -230,8 +226,10 @@ namespace RadialLauncher
         {
             var config = _configService.Config;
 
+            // 配置里总开关关掉就不触发。
+            // 注：设置面板打开期间由 _hook.Pause() 整段挂起钩子（见 OpenSettingsWindow），
+            // 所以这里不需要再判断“面板是否打开”，也不必为录制按键留专门的分支。
             if (!config.Trigger.Enabled) return false;
-            if (_settings is { IsVisible: true, IsRecordingKey: true }) return false;
 
             return _detector.IsAllowed(config);
         }
@@ -372,7 +370,23 @@ namespace RadialLauncher
 
             if (stillDown)
             {
-                Logger.Warn($"等待修饰键抬起超时（{KeyStateHelper.DescribeDown()} 仍按下），照常执行「{item.Name}」");
+                // 超时且修饰键仍按着：直接带着残留修饰键执行会把 Win+V 合成成
+                // Ctrl+Win+V（轻则没反应、重则触发系统提示音）。这里主动把仍按着的
+                // 修饰键全部补发一次“松开”，让这次执行的结果确定；补发后仍无法抬起
+                // 时才放弃执行，避免把污染过的快捷键投给系统。
+                var released = KeyStateHelper.ForceReleaseAllDown();
+
+                if (KeyStateHelper.AnyModifierDown())
+                {
+                    Logger.Warn($"等待修饰键抬起超时（{KeyStateHelper.DescribeDown()} 仍按下），已放弃执行「{item.Name}」");
+                    ToastWindow.Show(
+                        string.Format(Loc.T("Msg_ActionBlockedModifier"), item.Name),
+                        Loc.T("Msg_ActionBlockedModifierHint"),
+                        error: true);
+                    return;
+                }
+
+                Logger.Warn($"等待修饰键抬起超时，已补发松开（{string.Join("+", released)}）后执行「{item.Name}」");
             }
 
             ExecuteItem(item);

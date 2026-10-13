@@ -270,11 +270,10 @@ namespace RadialLauncher.Services
                             swallow = isDown ? HandleWinDown() : HandleWinUp();
                         else if (isUp && _winSwallowed)
                         {
-                            // 监听被关掉但之前吞过一次按下，补上松开（延迟补发）
-                            _winSwallowed = false;
-                            _winReplayed = false;
-                            Post(() => KeySequence.KeyUp(NativeMethods.VK_LWIN));
-                            swallow = true;
+                            // 监听被关掉但之前吞过一次按下，补上松开（延迟补发）。
+                            // 走 HandleWinUp 而不是自己再写一遍补发逻辑：
+                            // “什么时候该补 up”只能有一个信念来源，否则很容易变成双份 KeyUp。
+                            swallow = HandleWinUp();
                         }
                         break;
 
@@ -334,13 +333,9 @@ namespace RadialLauncher.Services
                         break;
 
                     case NativeMethods.WM_MBUTTONUP:
-                        if (ListenMiddle) swallow = HandleMiddleUp();
-                        else if (_midReleaseInjected)
-                        {
-                            _midReleaseInjected = false;
-                            _midPassedThrough = false;
-                            swallow = true;
-                        }
+                        // 无论监听是否仍开着都交给 HandleMiddleUp 统一判断：
+                        // 它内部已覆盖“不是本程序武装的那次、但接管时补发过松开”的兜底路径。
+                        swallow = HandleMiddleUp();
                         break;
 
                     case NativeMethods.WM_MOUSEMOVE:
@@ -470,7 +465,16 @@ namespace RadialLauncher.Services
 
         private bool HandleMiddleDown(NativeMethods.POINT pt)
         {
-            if (_armed != TriggerKind.None) return false;
+            if (_armed != TriggerKind.None)
+            {
+                // 上一次手势还没结束（例如接管时补发过松开、但用户又立刻按下中键）就被
+                // 别的键武装了。这里必须把中键的两个标志归位，否则这一次真实松开会被
+                // 上一次残留的 _midReleaseInjected 误判成“已经补发过”而吞掉，
+                // 导致系统以为中键一直按着（浏览器卡在中键滚动模式）。
+                _midPassedThrough = false;
+                _midReleaseInjected = false;
+                return false;
+            }
 
             Arm(TriggerKind.Middle);
             _midDownPoint = pt;
@@ -495,11 +499,12 @@ namespace RadialLauncher.Services
             }
 
             bool fired = _fired;
-            FinishGesture();
 
+            // 必须在 FinishGesture 之前把值读走：FinishGesture 会把手势内的中键标志
+            // 归零（防止渗进下一次手势），之后再读就永远是 false 了。
             bool injected = _midReleaseInjected;
-            _midReleaseInjected = false;
-            _midPassedThrough = false;
+
+            FinishGesture();
 
             if (!fired) return false;   // 轻点：原样放行
 
@@ -620,7 +625,15 @@ namespace RadialLauncher.Services
             }
         }
 
-        /// <summary>触发键松开：隐藏轮盘并执行选中项。可能被钩子调用，所以只能改状态 + 投递。</summary>
+        /// <summary>
+        /// 触发键松开：隐藏轮盘并执行选中项。可能被钩子调用，所以只能改状态 + 投递。
+        ///
+        /// <para><b>注意副作用：</b>除清空 <c>_armed</c>/<c>_fired</c>/<c>_cancelled</c> 外，
+        /// 还会把中键的两个标志（<c>_midPassedThrough</c>/<c>_midReleaseInjected</c>）归零。
+        /// 因此任何需要读取这两个标志的调用方都**必须在本方法之前读取**，
+        /// 参见 <see cref="HandleMiddleUp"/>。Win 的两个标志（<c>_winSwallowed</c>/<c>_winReplayed</c>）
+        /// 不在此处清理，仍由 <see cref="HandleWinUp"/> 负责。</para>
+        /// </summary>
         private void FinishGesture()
         {
             _holdTimer.Stop();
@@ -629,6 +642,11 @@ namespace RadialLauncher.Services
             _armed = TriggerKind.None;
             _fired = false;
             _cancelled = false;
+
+            // 手势只要结束，中键的两个标志就必须归位：调用方（HandleMiddleUp）会先读走
+            // 它需要的那份值，这里清掉是为了防止任何残留标志渗进下一次手势。
+            _midPassedThrough = false;
+            _midReleaseInjected = false;
 
             if (!wasFired) return;
 
@@ -694,7 +712,12 @@ namespace RadialLauncher.Services
                 // 顺序很重要：先摘钩子，确保后面补发的按键不会再走进我们自己的回调，
                 // 也避免在进程退出过程中还留着内核钩子（那正是进程退不掉的原因）。
                 bool winStuck = _winSwallowed && !_winReplayed;
-                bool midStuck = _midPassedThrough && !_midReleaseInjected;
+
+                // 与 OnHoldElapsed 的接管条件保持一致：只有 SuppressMiddle 时我们才会
+                // 主动补发过一次中键松开。若 SuppressMiddle 关闭，按下本就一直放行、
+                // 从未补发，此时 _midPassedThrough 恒为 true、_midReleaseInjected 恒为
+                // false，这里是用户真实按着的中键，绝不能替他补一次松开。
+                bool midStuck = SuppressMiddle && _midPassedThrough && !_midReleaseInjected;
 
                 Stop();
 

@@ -265,3 +265,84 @@ public static string DataDirectory { get; } = Path.Combine(..., "RadialLauncher"
 | P2 | #7、#9 注释/缓存上限 | 小 | ✅ 已完成 |
 | P3 | #10 数据目录可注入（解锁日志轮转测试） | 中 | 待处理 |
 | P3 | #12 钩子状态机抽纯函数（收益最大） | 大 | 待处理 |
+
+---
+
+## 七、按键监听逻辑专项审查（2026-10-13）
+
+> 对象：`Services/InputHookService.cs`（717 行，`WH_KEYBOARD_LL` / `WH_MOUSE_LL` 全局钩子）
+> 及配套的 `KeyStateHelper` / `KeySequence` / `MainWindow` 修饰键等待路径。
+> 本轮为**针对该子系统的专项复查**，编号独立于上面第 2–4 节。
+
+### 总体结论
+
+"钩子回调内只改状态、副作用一律 `BeginInvoke` 回消息循环"这条铁律在全文 717 行无一处违反；
+"用 `dwExtraInfo` 而非 `LLKHF_INJECTED` 过滤自注入输入"的取舍正确（不会顺带屏蔽
+AutoHotkey / 辅助功能软件）。三种触发键的拦截策略（Ctrl 只观察、Win 吞下+回放、
+中键先放行+接管）设计意图清晰。但状态迁移存在若干"标志跨手势残留"的缺陷。
+
+### P1（行为缺陷，本轮已修复）
+
+| 编号 | 问题 | 修复 |
+|---|---|---|
+| P1-A | 中键 `_midReleaseInjected` 跨手势残留：`HandleMiddleDown` 在 `_armed != None` 时早退且不重置标志，导致下一次真实松开被吞，系统以为中键一直按着（浏览器卡在中键滚动模式） | `HandleMiddleDown` 早退分支 + `FinishGesture` 均归零 `_midPassedThrough` / `_midReleaseInjected` |
+| P1-B | `ListenWin` 中途关闭的补发路径与 `HandleWinUp` 的兜底**各自实现**同一逻辑，靠 `else` 互斥隐性维持，任何改动都可能变成双份 `KeyUp`；且旧路径从不 `FinishGesture`，会留下 `_armed == Win` 残影 | Win / 中键的补发出口分别收敛为唯一的 `HandleWinUp()` / `HandleMiddleUp()` |
+| P1-C | 修饰键等待超时后仅记 `Warn` 就**照常执行**，`Win+V` 仍会被合成成 `Ctrl+Win+V`（轻则无响应、重则触发系统提示音） | 新增 `KeyStateHelper.ForceReleaseAllDown()`：超时后先强制补发松开，复核 `AnyModifierDown()`；仍按着则**放弃执行**并弹 Toast（新增 `Msg_ActionBlockedModifier` / `Msg_ActionBlockedModifierHint`） |
+
+> ⚠️ **修复 P1-A 时踩到的坑**：`HandleMiddleUp` 原本在 `FinishGesture()` **之后**读
+> `_midReleaseInjected`；给 `FinishGesture` 加了清零后，这里会永远读到 `false`，
+> 恰好会破坏"接管后吞掉真实松开"这一核心行为。必须把 `bool injected = _midReleaseInjected;`
+> **移到 `FinishGesture()` 之前**。`FinishGesture` 的 XML 注释已写明该副作用顺序约束。
+
+### P2（健壮性 / 可维护性，本轮已全部修复）
+
+| 编号 | 问题 | 修复 |
+|---|---|---|
+| P2-A | `SettingsWindow.IsRecordingKey` 硬编码 `false`，`MainWindow.CanTrigger` 的守卫是**死代码**；`IAppHost.PauseHook` / `ResumeHook` 是**零调用的死接口成员** | 三处死成员全部删除；`CanTrigger` 改为注释说明"设置面板打开期间由 `_hook.Pause()` 整段挂起" |
+| P2-B | `KeyStateHelper.WaitForModifiersReleased` 全项目**无调用方**，且 XML 注释（"唯一生产调用点在钩子回调里"）已过期 | 删除该方法，连带清掉不再需要的 `using System;` / `using System.Threading;` |
+| P2-C | `ScreenColorPickerWindow` 的 Esc 用 `IsDown` **电平**检测，而左右键用 `_leftWasDown` / `_rightWasDown` **边沿**检测，模式不一致；按住 Esc 会每 20ms 反复触发取消 | 新增 `_escWasDown`，Esc 改为边沿检测，与左右键统一 |
+| P2-D | `Dispose` 的 `midStuck = _midPassedThrough && !_midReleaseInjected` 未加 `SuppressMiddle` 条件：关闭中键抑制时该式恒为 `true`，进程退出会平白注入一次 MIDDLEUP | **✅ 上一轮已修**：加 `SuppressMiddle &&`，与 `OnHoldElapsed` 的接管条件对齐 |
+
+> ⚠️ **对上一轮判断的更正**：上一轮曾断言"录制按键的 Picker 窗口打开时钩子并未 `Pause`"，
+> 这是**错误的**。追查调用链后确认：所有 Picker 只从 `SettingsWindow` 打开，而
+> `MainWindow.OpenSettingsWindow` **开面板就调 `_hook.Pause()`**（关闭时 `Resume()`），
+> `--settings` 启动参数也走同一路径 —— 所以**录制期间钩子确实被暂停了**，
+> 只是走的是具体类型 `_hook.Pause()` 而非那个死接口方法。
+> 教训：**"caller 数量为零"只能证明接口成员是死代码，不能证明该能力缺失** ——
+> 必须把调用链查完才能下结论。原错误判断已在此更正。
+
+### P3（结构性，建议单开一轮）
+
+第 12 条（钩子状态机抽纯函数）在本轮复查后**优先级应再提高**：P1-A / P1-B / P2-D
+三个问题全部是"某个标志该不该在某个分支清零"这一类，正是"状态与决策耦合"的必然产物。
+现有 355 个测试中没有一个覆盖钩子状态机（它依赖真实输入，无法在进程内驱动）。
+建议先抽 `record struct HookState` + 纯函数 `Decide(state, event, options) -> (nextState, swallow, effects)`，
+把 6 个 `Handle*` 方法改为"状态输入 → 决策输出"，副作用由回调层执行 —— 改动集中在一个文件，
+风险可控，收益是让这类缺陷从"靠人肉时序推理"变为"靠表驱动测试证明"。
+
+> **代码审查补充交付**：专项审查结论 + P1×3 修复说明 + P2 清单，见本记录；P2-1/P2-2/P2-3 仍未处理。
+
+### 用 codegraph 交叉验证（2026-10-13，工具复核）
+
+本项目已建立 codegraph 索引（`codegraph init`，50 文件 / 1,595 节点 / 3,728 边）。
+用它的**调用路径 + 动态派发 + 爆炸半径**三个维度复核上面的结论，得到两条工具级硬证据：
+
+1. **`PauseHook` / `ResumeHook` 是死接口成员**（P2-A 的一半）。
+   codegraph 的动态派发合成显示这两个方法**各只有 1 个 caller，就是 `IAppHost` 接口声明本身**；
+   `MainWindow.OpenSettingsWindow` 是直接调 `_hook.Pause()`（具体类型），并未走接口。
+   全仓 grep 复核：`PauseHook` / `ResumeHook` 仅出现在 `IAppHost.cs`（声明）与
+   `MainWindow.xaml.cs`（实现），**调用点为零**。
+   而 `IAppHost.PauseHook` 的注释却写着"暂停全局钩子（**例如在设置里录制按键时**）"——
+   承诺了一个没人用的能力。→ 已删除这两个接口成员及其实现。
+
+2. **钩子子系统零测试覆盖**（证实 P3 的核心论据）。
+   codegraph 对 `KeyboardProc` / `MouseProc` / `HandleWinUp` / `HandleMiddleUp` /
+   `HandleMiddleDown` / `OnHoldElapsed` / `HandleOtherKeyDown` / `CancelGesture` 全部报
+   "no tests found within 3 caller hops"；grep 测试项目确认
+   `InputHookService` / `TriggerKind` / `KeyStateHelper` / `ForceReleaseAllDown` **均无任何引用**。
+   即：本轮 P1×3 的修复**没有任何自动化测试守护**，只能靠人工时序推理。
+
+> **结论**：codegraph 把 P2-A 与 P3 从"读代码得出的判断"升级为"工具可复现的事实"。
+> 但它也提醒了一个边界：**"caller 数量为零"只说明接口成员是死代码，
+> 不等于该能力缺失** —— 能力可能由等价实现（这里的 `_hook.Pause()`）提供。
+> `.codegraph/` 体积约 4.6 MB，自带 `.gitignore`，不会污染仓库。

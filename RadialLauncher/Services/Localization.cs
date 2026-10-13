@@ -307,6 +307,8 @@ namespace RadialLauncher.Services
             ["Msg_InvalidShortcut"] = "无法识别的快捷键：{0}",
             ["Msg_FileNotFound"] = "文件不存在：{0}",
             ["Msg_Done"] = "执行完成",
+            ["Msg_ActionBlockedModifier"] = "「{0}」未执行",
+            ["Msg_ActionBlockedModifierHint"] = "修饰键一直未抬起，为避免发送被污染的快捷键已取消本次执行，请松开后再试。",
         };
 
         private static readonly Dictionary<string, string> En = new()
@@ -542,6 +544,8 @@ namespace RadialLauncher.Services
             ["Msg_InvalidShortcut"] = "Unrecognized shortcut: {0}",
             ["Msg_FileNotFound"] = "File not found: {0}",
             ["Msg_Done"] = "Done",
+            ["Msg_ActionBlockedModifier"] = "\u201c{0}\u201d was not run",
+            ["Msg_ActionBlockedModifierHint"] = "A modifier key stayed held, so the run was cancelled to avoid sending a polluted shortcut. Release the keys and try again.",
         };
     }
 }

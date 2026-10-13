@@ -47,9 +47,6 @@ namespace RadialLauncher.Views
         /// </summary>
         private bool _controlsReady;
 
-        /// <summary>本面板不需要录制按键（触发键用复选框选择）。</summary>
-        public bool IsRecordingKey => false;
-
         /// <summary>控件事件是否可以安全处理。</summary>
         private bool CanHandleEvents => _controlsReady && !_loading;
 
