@@ -90,7 +90,9 @@ namespace RadialLauncher.Services
 
                 Config = loaded;
                 Normalize(Config);
-                Logger.Info($"配置已加载：Ctrl={Config.Trigger.ByCtrl} Win={Config.Trigger.ByWin} 中键={Config.Trigger.ByMiddleMouse}");
+                Logger.Info($"配置已加载：Ctrl={Config.Trigger.ByCtrl} Win={Config.Trigger.ByWin} " +
+                            $"Alt={Config.Trigger.ByAlt} 中键={Config.Trigger.ByMiddleMouse} " +
+                            $"自定义=[{CustomTriggerKeys.Describe(Config.Trigger.CustomTriggerKeys)}]");
             }
             catch (Exception ex)
             {
@@ -188,7 +190,13 @@ namespace RadialLauncher.Services
 
             c.Trigger.HoldThresholdMs = (int)Clamp(c.Trigger.HoldThresholdMs, 60, 1500, 220);
 
-            if (!c.Trigger.ByCtrl && !c.Trigger.ByWin && !c.Trigger.ByMiddleMouse)
+            // 自定义触发键：名字收敛（去空白/保留键/无法识别的名字、按虚拟键码去重、截断）。
+            // 必须在“至少保留一个触发键”的判断之前做，否则一串全是垃圾名字时会误判成
+            // “用户还配了自定义键”，结果一个能用的触发键都不剩。
+            c.Trigger.CustomTriggerKeys = CustomTriggerKeys.Normalize(c.Trigger.CustomTriggerKeys);
+
+            if (!c.Trigger.ByCtrl && !c.Trigger.ByWin && !c.Trigger.ByAlt &&
+                !c.Trigger.ByMiddleMouse && c.Trigger.CustomTriggerKeys.Count == 0)
                 c.Trigger.ByCtrl = true;   // 至少保留一个触发键
 
             c.System.Language = string.IsNullOrWhiteSpace(c.System.Language) ? "zh-CN" : c.System.Language;
@@ -353,6 +361,10 @@ namespace RadialLauncher.Services
                 result.Trigger.ByWin = legacy.TriggerByWin;
                 result.Trigger.ByMiddleMouse = legacy.TriggerByMiddleMouse;
                 result.Trigger.Enabled = true;
+
+                // v1 没有 Alt 与自定义触发键这两项，迁移后保持出厂默认（关闭 / 空列表），
+                // 只在配置里已经是 null 时兜底，避免把用户可能已有的值抹掉。
+                result.Trigger.CustomTriggerKeys ??= new();
 
                 result.Appearance.ItemCount = legacy.WheelItemCount == 4 ? 4 : 8;
                 if (!string.IsNullOrWhiteSpace(legacy.BackgroundColor)) result.Appearance.BackgroundColor = legacy.BackgroundColor!;

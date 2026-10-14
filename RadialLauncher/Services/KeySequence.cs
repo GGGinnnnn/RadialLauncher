@@ -123,6 +123,17 @@ namespace RadialLauncher.Services
             _ => 9,
         };
 
+        /// <summary>
+        /// 把**单个**按键名解析成虚拟键码（供自定义触发键这类“单键”场景使用）。
+        /// 与 <see cref="TryParse"/> 共用同一张名字表，避免出现两套对不上的键名。
+        /// </summary>
+        public static bool TryResolveKey(string? name, out int vk)
+        {
+            vk = 0;
+            if (string.IsNullOrWhiteSpace(name)) return false;
+            return TryResolveToken(name.Trim(), out vk);
+        }
+
         private static bool TryResolveToken(string token, out int vk)
         {
             if (Map.TryGetValue(token, out vk)) return true;

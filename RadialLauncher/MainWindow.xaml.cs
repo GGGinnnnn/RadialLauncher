@@ -130,7 +130,8 @@ namespace RadialLauncher
                 if (_configService.Config.Trigger.Enabled) _hook.Start();
 
                 Logger.Info($"服务已启动：触发键 Ctrl={_configService.Config.Trigger.ByCtrl} " +
-                            $"Win={_configService.Config.Trigger.ByWin} 中键={_configService.Config.Trigger.ByMiddleMouse} " +
+                            $"Win={_configService.Config.Trigger.ByWin} Alt={_configService.Config.Trigger.ByAlt} " +
+                            $"中键={_configService.Config.Trigger.ByMiddleMouse} " +
                             $"延时={_configService.Config.Trigger.HoldThresholdMs}ms");
             }
             catch (Exception ex)
@@ -175,7 +176,11 @@ namespace RadialLauncher
             _hook.UpdateSettings(new InputHookService.HookSettings(
                 ListenCtrl: config.Trigger.ByCtrl,
                 ListenWin: config.Trigger.ByWin,
+                ListenAlt: config.Trigger.ByAlt,
                 ListenMiddle: config.Trigger.ByMiddleMouse,
+                // 名字 → 虚拟键码只在这里解析一次：钩子回调里每秒要跑上百次，
+                // 绝不能再去查表解析字符串。
+                CustomTriggerVks: CustomTriggerKeys.ToVks(config.Trigger.CustomTriggerKeys),
                 SuppressWin: config.Trigger.SuppressWinKey,
                 SuppressMiddle: config.Trigger.SuppressMiddleClick,
                 CancelOnOtherKey: config.Trigger.CancelOnOtherKey,

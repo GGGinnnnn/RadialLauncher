@@ -64,7 +64,9 @@ namespace RadialLauncher.Services
         public sealed record HookSettings(
             bool ListenCtrl,
             bool ListenWin,
+            bool ListenAlt,
             bool ListenMiddle,
+            int[] CustomTriggerVks,
             bool SuppressWin,
             bool SuppressMiddle,
             bool CancelOnOtherKey,
@@ -129,7 +131,9 @@ namespace RadialLauncher.Services
         private volatile HookSettings _settings = new(
             ListenCtrl: true,
             ListenWin: false,
+            ListenAlt: false,
             ListenMiddle: false,
+            CustomTriggerVks: [],
             SuppressWin: true,
             SuppressMiddle: true,
             CancelOnOtherKey: true,
@@ -722,8 +726,19 @@ namespace RadialLauncher.Services
                         if (isDown) result = _machine.EscapeDown();
                         break;
 
+                    case NativeMethods.VK_MENU:
+                    case NativeMethods.VK_LMENU:
+                    case NativeMethods.VK_RMENU:
+                        result = _machine.AltEvent(isDown);
+                        break;
+
                     default:
-                        if (isDown) result = _machine.OtherKeyDown();
+                        // 自定义触发键走自己的分支：它们需要在**松开**时结束手势，
+                        // 而普通按键只在按下时有意义（OtherKeyDown 会把它当成组合键/取消）。
+                        if (_machine.IsCustomTriggerKey(vk))
+                            result = _machine.CustomKeyEvent(vk, isDown);
+                        else if (isDown)
+                            result = _machine.OtherKeyDown();
                         break;
                 }
 
@@ -880,7 +895,9 @@ namespace RadialLauncher.Services
 
                 _machine.ListenCtrl = settings.ListenCtrl;
                 _machine.ListenWin = settings.ListenWin;
+                _machine.ListenAlt = settings.ListenAlt;
                 _machine.ListenMiddle = settings.ListenMiddle;
+                _machine.CustomTriggerKeys = settings.CustomTriggerVks;
                 _machine.SuppressWin = settings.SuppressWin;
                 _machine.SuppressMiddle = settings.SuppressMiddle;
                 _machine.CancelOnOtherKey = settings.CancelOnOtherKey;
