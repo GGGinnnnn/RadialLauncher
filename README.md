@@ -2,10 +2,11 @@
 
 按住 **Ctrl** / **Win** / **鼠标中键**，在鼠标位置唤出的轮盘启动器。
 
-Windows 10 / 11 · .NET 8 · WPF · 免安装
+Windows 10 / 11（64 位）· .NET 8 · WPF · 免安装
 
 [![最新版本](https://img.shields.io/github/v/release/GGGinnnnn/RadialLauncher?label=Release&color=0067C0)](../../releases)
 [![下载量](https://img.shields.io/github/downloads/GGGinnnnn/RadialLauncher/total?label=Downloads&color=0067C0)](../../releases)
+[![许可证](https://img.shields.io/github/license/GGGinnnnn/RadialLauncher?label=License&color=0067C0)](LICENSE)
 
 ---
 
@@ -41,7 +42,7 @@ Windows 10 / 11 · .NET 8 · WPF · 免安装
 - **外观** — 四向或八向、五种颜色（带取色器，也能直接从屏幕上吸色）、
   大小、中心死区、透明度、发光、动画。
 - **界面字体** — 内置微软雅黑 / Segoe UI / Arial / 原神字体 / Minecraft 字体等
-  16 个推荐项，也会列出本机全部已装字体；没装的会标灰，选了也不会出问题
+  17 个推荐项，也会列出本机全部已装字体；没装的会标灰，选了也不会出问题
   （自动回退，不会变方框）。
 - **中英双语** — 界面可切换中文 / English。
 
@@ -52,14 +53,30 @@ Windows 10 / 11 · .NET 8 · WPF · 免安装
 
 ## 快速开始
 
-1. 到 [Releases](../../releases) 下载最新的 `RadialLauncher-vX.Y.7z`，
-   解压到任意固定位置（**不要**放在临时目录）。
-2. 双击 `RadialLauncher.exe`。程序不显示主窗口，只在托盘出现一个蓝色轮盘图标。
-3. 在任意窗口按住 `Ctrl` 约 0.2 秒 → 轮盘弹出 → 移动鼠标选中 → 松开执行。
-   按 `Esc` 取消。
-4. 右键托盘图标打开菜单，双击托盘图标直接打开设置面板。
+到 [Releases](../../releases) 下载。三种包功能完全一样，只是打包方式不同：
 
-> 压缩包是**自包含**的，已经带了完整的 .NET 运行时，不需要另外安装 .NET。
+| 形态 | 体积 | 要装 .NET 吗 | 说明 |
+| --- | --- | --- | --- |
+| **单文件 exe**（推荐） | 约 64 MB | 不用 | 只有一个文件，双击即用，最省事 |
+| 便携 7z | 约 46 MB | 不用 | 解压成文件夹，便于留档 / 带走 |
+| MSIX 安装包 | 约 64 MB | 不用 | 进开始菜单，可从「应用」里卸载 |
+
+**① 单文件版（推荐）** —— 下载 `RadialLauncher-v0.3.exe`，放到任意固定目录
+（**不要**放临时目录），双击运行。程序不显示主窗口，只在托盘出现一个蓝色轮盘图标。
+首次启动会先自解压到 `%TEMP%\.net\`，慢一两秒，之后就正常了；在 exe 旁边放一个空的
+`portable.marker` 就能切成便携模式（见「数据目录」）。
+
+**② 便携 7z** —— 下载 `RadialLauncher-v0.3-portable.7z`，解压到任意固定位置，
+双击里面的 `RadialLauncher.exe`。
+
+**③ MSIX 安装包** —— 下载 `RadialLauncher_0.3.0.0_x64.msix` 和配套的
+`RadialLauncher_Test.cer`，**先把 `.cer` 导入「本地计算机 → 受信任人」**
+（`LocalMachine\TrustedPeople`，导到「当前用户」不管用），再双击 `.msix` 安装。
+
+> 三种包都是**自包含**的，已经带了完整的 .NET 运行时，不需要另外安装 .NET。
+
+**上手**：在任意窗口按住 `Ctrl` 约 0.2 秒 → 轮盘弹出 → 移动鼠标选中 → 松开执行，
+按 `Esc` 取消。右键托盘图标打开菜单，双击托盘图标直接打开设置面板。
 
 ## 命令行参数
 
@@ -73,12 +90,25 @@ Windows 10 / 11 · .NET 8 · WPF · 免安装
 
 ## 数据目录
 
+默认在 `%AppData%\RadialLauncher\`：
+
 ```
-%AppData%\RadialLauncher\
-    config.json          全部设置（可直接备份 / 迁移）
-    RadialLauncher.log   运行日志，出问题先看这里
-    tray.ico             托盘图标
+config.json               全部设置（可直接备份 / 迁移）
+config.backup.json        上一次保存的副本，config.json 读不出来时自动用它恢复
+config.corrupt-*.json     配置真的坏了才会出现的取证文件
+RadialLauncher.log        运行日志，出问题先看这里
+RadialLauncher.log.old    日志超过 1 MB 后的上一份
+tray.ico                  托盘图标
 ```
+
+**也可以改用便携模式**，把配置、日志与托盘图标全部留在 exe 同级目录，
+整个文件夹拷到 U 盘就能带走全部设置。两种做法：手动在 exe 旁边放一个空的
+`portable.marker`，或者在「系统设置 → 数据目录」里切换。切换是**复制**而不是搬移
+（原目录保留），并且立即生效。环境变量 `RADIALLAUNCHER_DATA_DIR` 可以硬覆盖
+数据目录，优先级最高。
+
+程序装在 `Program Files` 这类受保护目录时请用默认的 `%AppData%` ——
+便携目录写不进去，设置面板会直接告诉你原因。
 
 卸载：删除程序文件夹，再删掉上面这个数据目录即可。**不写注册表**
 （除非你开启过「开机自启动」）。
@@ -102,14 +132,33 @@ Windows 10 / 11 · .NET 8 · WPF · 免安装
 ```bash
 git clone https://github.com/GGGinnnnn/RadialLauncher.git
 cd RadialLauncher
-dotnet build RadialLauncher/RadialLauncher.csproj -c Release
 
-# 自包含发布（和 Release 里的包一致）
+dotnet build RadialLauncher/RadialLauncher.csproj -c Release              # 构建
+dotnet test RadialLauncher.Tests/RadialLauncher.Tests.csproj -c Release   # 单元测试
+
+# 散装自包含发布（和 Release 里的 7z 一致）
 dotnet publish RadialLauncher/RadialLauncher.csproj \
-  -c Release -r win-x64 --self-contained true -o publish
+  -c Release -r win-x64 --self-contained true -o build/publish/portable
+
+# 单文件 exe：产物只有一个文件，约 140 MB
+dotnet publish RadialLauncher/RadialLauncher.csproj \
+  -c Release -r win-x64 -p:SingleFilePublish=true -o build/publish/single
 ```
 
+单文件发布还可以叠加两个开关（注释就在 `RadialLauncher.csproj` 里）：
+
+| 开关 | 效果 |
+| --- | --- |
+| `-p:SingleFileCompress=true` | 压到约 64 MB，代价是首次启动多约 1 秒解压 |
+| `-p:SelfContained=false` | 只有约 1.7 MB，但目标机必须预装 .NET 8 桌面运行时 |
+
 用 Visual Studio 或 Rider 直接打开 `RadialLauncher.slnx` 也可以。
+`MSIX Packaging/` 是 MSIX 打包工程，`dotnet` CLI 编不动它（缺 DesktopBridge 任务），
+所以 `dotnet build RadialLauncher.slnx` 会在这一项上报错——构建应用请直接指定
+`RadialLauncher/RadialLauncher.csproj`；要出 MSIX 就用装了「Windows 应用打包项目」
+组件的 Visual Studio。MSIX 用自签证书签名（证书是签名时生成的，不进版本库），
+**安装前必须先把那个 `.cer` 导入「本地计算机 → 受信任人」**
+（`LocalMachine\TrustedPeople` —— 导到「当前用户」不管用）。
 
 ## 项目结构
 
@@ -117,24 +166,30 @@ dotnet publish RadialLauncher/RadialLauncher.csproj \
 RadialLauncher/
 ├─ Models/        AppConfig 等数据模型
 ├─ Services/      钩子引擎、配置、本地化、字体目录、动作执行 …
-│    InputHookService.cs   低级键鼠钩子（全局触发）
-│    ConfigService.cs      配置读写与版本迁移
-│    FontCatalog.cs        界面字体探测与回退
+│    InputHookService.cs    低级键鼠钩子（跑在专用线程 + 自有消息泵上）
+│    HookGestureMachine.cs  手势状态机（纯逻辑，可单元测试）
+│    ConfigService.cs       配置读写、版本迁移、损坏时从备份恢复
+│    AppPaths.cs            数据目录解析（%AppData% / 便携 / 环境变量）
+│    WheelGeometry.cs       轮盘几何计算（窗口与预览共用一套）
+│    FontCatalog.cs         界面字体探测与回退链
 ├─ Views/         SettingsWindow / WheelWindow / 取色器 …
 ├─ Controls/      自绘控件（轮盘预览等）
 ├─ Styles/        Theme.xaml（设计标记）+ Controls.xaml（控件外观）
 └─ Resources/     图标
+
+RadialLauncher.Tests/   xUnit 单元测试（约 450 个）
 ```
 
 界面外观集中在 `Styles/` 下的两个资源字典里，想改配色或控件样式只动这两处即可。
 
 ## 实现要点
 
-- **钩子回调必须立刻返回。** 早期版本在钩子回调里直接执行用户动作
+- **钩子回调只改状态标志，而且跑在自己的线程上。** 早期版本在钩子回调里直接执行用户动作
   （打开网址、发快捷键、写日志），这类操作会阻塞钩子线程，最坏情况与系统输入链
   互相等待造成死锁——表现为托盘无响应、程序打不开、后台留下一个连"结束任务"
-  都杀不掉的僵尸进程。现在回调里**只改状态标志**，所有实际动作都通过消息循环
-  异步执行，实测钩子回调最长不到 9 ms（系统上限 300 ms）。
+  都杀不掉的僵尸进程。现在钩子装在一条**专用线程**上（自带消息泵，与界面渲染完全隔离），
+  回调里**只改状态标志**，所有实际动作都异步执行；系统对钩子回调有 300 ms 硬上限，
+  超时就会被静默摘钩，这条线程的存在就是为了远离那条线。
 - **执行动作前会等修饰键抬起。** 触发键本身就是修饰键，而松开触发键到合成快捷键
   之间，Windows 的按键状态表对物理按键的更新滞后于低级钩子，于是 `Win+V`
   会被系统算成 `Ctrl+Win+V`（还伴随系统提示音）。现在会先确认
@@ -144,4 +199,9 @@ RadialLauncher/
 
 ## 许可
 
-尚未指定许可证。
+本项目采用 **GNU 通用公共许可证第 2 版（GPL-2.0）**，全文见 [LICENSE](LICENSE)。
+
+你可以自由地使用、修改、再分发，前提是分发时**一并提供源代码**、保留同样的许可，
+并且不附加任何额外限制。本程序**不含任何担保**。
+
+> 发布的是二进制包（单文件 exe / 便携 7z / MSIX），完整源码就在本仓库。
