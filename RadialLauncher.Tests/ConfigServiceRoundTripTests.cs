@@ -105,6 +105,23 @@ public class ConfigServiceRoundTripTests : IDisposable
     }
 
     [Fact]
+    public void SaveThenLoad_PreservesAltAndCustomTriggerKeys()
+    {
+        var service = new ConfigService();
+        service.Config.Trigger.ByCtrl = false;
+        service.Config.Trigger.ByAlt = true;
+        service.Config.Trigger.CustomTriggerKeys = ["F13", "CapsLock"];
+        service.Save();
+
+        var reloaded = new ConfigService();
+        reloaded.Load();
+
+        Assert.True(reloaded.Config.Trigger.ByAlt);
+        Assert.False(reloaded.Config.Trigger.ByCtrl);
+        Assert.Equal(["F13", "CapsLock"], reloaded.Config.Trigger.CustomTriggerKeys);
+    }
+
+    [Fact]
     public void Save_WritesSchemaVersionTwo()
     {
         var service = new ConfigService();

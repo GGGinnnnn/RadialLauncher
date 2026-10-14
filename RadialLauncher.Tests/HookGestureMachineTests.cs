@@ -21,17 +21,21 @@ public class HookGestureMachineTests
 
     private static HookPoint P(int x, int y) => new(x, y);
 
-    /// <summary>默认只监听 Ctrl（和出厂配置一致）：Win / 中键要显式打开。</summary>
+    /// <summary>默认只监听 Ctrl（和出厂配置一致）：Win / Alt / 中键 / 自定义键要显式打开。</summary>
     private static HookGestureMachine Machine(
         bool win = false,
         bool middle = false,
         bool suppressWin = true,
-        bool suppressMiddle = true)
+        bool suppressMiddle = true,
+        bool alt = false,
+        int[]? customKeys = null)
         => new()
         {
             ListenCtrl = true,
             ListenWin = win,
+            ListenAlt = alt,
             ListenMiddle = middle,
+            CustomTriggerKeys = customKeys ?? [],
             SuppressWin = suppressWin,
             SuppressMiddle = suppressMiddle,
         };
@@ -43,7 +47,9 @@ public class HookGestureMachineTests
         {
             case TriggerKind.Ctrl: m.CtrlEvent(true); break;
             case TriggerKind.Win: m.WinEvent(true); break;
+            case TriggerKind.Alt: m.AltEvent(true); break;
             case TriggerKind.Middle: m.MiddleButtonDown(P(0, 0)); break;
+            case TriggerKind.Custom: m.CustomKeyEvent(0x7C, true); break;   // 0x7C = F13
         }
 
         m.HoldElapsed();
@@ -283,7 +289,281 @@ public class HookGestureMachineTests
         Assert.Equal(HookEffect.None, r.Effects);
     }
 
-    // ==================== 鼠标中键：轻点 / 拖动 / 接管 ====================
+    // ==================== Alt ====================
+
+    [Fact]
+    public void AltDown_ArmsAndStartsTimer()
+    {
+        var m = Machine(alt: true);
+
+        var r = m.AltEvent(true);
+
+        Assert.False(r.Swallow);                          // Alt 只观察，不拦截（Alt+Tab / Alt+F4 必须能用）
+        Assert.True(Has(r.Effects, HookEffect.StartHoldTimer));
+        Assert.Equal(TriggerKind.Alt, m.ArmedKind);
+    }
+
+    [Fact]
+    public void AltDown_WhenListenDisabled_IsIgnored()
+    {
+        var m = Machine();
+
+        var r = m.AltEvent(true);
+
+        Assert.Equal(HookEffect.None, r.Effects);
+        Assert.False(m.IsArmed);
+    }
+
+    /// <summary>
+    /// Alt 监听关闭时，Alt 按下仍要按“其他键”处理：按住 Ctrl 期间按下 Alt
+    /// （Ctrl+Alt+Del 的第一下）必须取消本次唤出 —— 这是 v0.4 的既有语义，
+    /// 加 Alt 触发键时不能把它放宽。
+    /// </summary>
+    [Fact]
+    public void AltDown_WhileListenDisabled_CancelsPendingTrigger()
+    {
+        var m = Machine(alt: false);
+        m.CtrlEvent(true);
+
+        var r = m.AltEvent(true);
+
+        Assert.True(Has(r.Effects, HookEffect.StopHoldTimer));
+        Assert.False(Has(m.HoldElapsed(), HookEffect.EvaluateTrigger));
+    }
+
+    [Fact]
+    public void AltUp_WhileListenDisabled_DoesNothing()
+    {
+        var m = Machine(alt: false);
+
+        var r = m.AltEvent(false);
+
+        Assert.Equal(HookEffect.None, r.Effects);
+    }
+
+    [Fact]
+    public void AltDown_WhileOtherTriggerArmed_IsIgnored()
+    {
+        var m = Machine(alt: true, win: true);
+        m.WinEvent(true);
+
+        var r = m.AltEvent(true);
+
+        Assert.Equal(HookEffect.None, r.Effects);
+        Assert.Equal(TriggerKind.Win, m.ArmedKind);
+    }
+
+    [Fact]
+    public void AltUp_WithoutArming_DoesNothing()
+    {
+        Assert.Equal(HookEffect.None, Machine(alt: true).AltEvent(false).Effects);
+    }
+
+    [Fact]
+    public void AltUp_WhileCtrlArmed_DoesNothing()
+    {
+        var m = Machine(alt: true);
+        m.CtrlEvent(true);
+
+        var r = m.AltEvent(false);
+
+        Assert.Equal(HookEffect.None, r.Effects);
+        Assert.Equal(TriggerKind.Ctrl, m.ArmedKind);
+    }
+
+    [Fact]
+    public void AltTap_EndsGestureWithoutExecuting()
+    {
+        var m = Machine(alt: true);
+        m.AltEvent(true);
+
+        var r = m.AltEvent(false);
+
+        Assert.False(r.Swallow);
+        Assert.True(Has(r.Effects, HookEffect.StopHoldTimer));
+        Assert.False(Has(r.Effects, HookEffect.HideWheelAndExecute));
+        Assert.False(m.IsArmed);
+    }
+
+    [Fact]
+    public void AltHeld_AfterWheelShown_ReleaseExecutes()
+    {
+        var m = Machine(alt: true);
+        ShowWheelByHolding(m, TriggerKind.Alt);
+
+        Assert.True(m.IsFired);
+
+        var r = m.AltEvent(false);
+
+        Assert.True(Has(r.Effects, HookEffect.HideWheelAndExecute));
+        Assert.False(r.Swallow);
+    }
+
+    [Fact]
+    public void AltCombo_OtherKey_CancelsPendingTrigger()
+    {
+        // Alt+F4 这类组合键：Alt 已被武装，按下 F4 必须取消唤出（F4 本身照常传递）
+        var m = Machine(alt: true);
+        m.AltEvent(true);
+
+        var r = m.OtherKeyDown();
+
+        Assert.True(Has(r.Effects, HookEffect.StopHoldTimer));
+        Assert.False(Has(m.HoldElapsed(), HookEffect.EvaluateTrigger));
+    }
+
+    [Fact]
+    public void AltDown_WhileCustomKeyArmed_IsIgnored()
+    {
+        var m = Machine(alt: true, customKeys: [0x7C]);
+        m.CustomKeyEvent(0x7C, true);
+
+        var r = m.AltEvent(true);
+
+        Assert.Equal(HookEffect.None, r.Effects);
+        Assert.Equal(TriggerKind.Custom, m.ArmedKind);
+    }
+
+    // ==================== 自定义触发键 ====================
+
+    [Fact]
+    public void CustomKey_NotConfigured_IsNotATrigger()
+    {
+        var m = Machine(customKeys: [0x7C]);
+
+        Assert.True(m.IsCustomTriggerKey(0x7C));
+        Assert.False(m.IsCustomTriggerKey(0x7D));
+    }
+
+    [Fact]
+    public void CustomKeyDown_ArmsAndNeverSwallows()
+    {
+        var m = Machine(customKeys: [0x7C]);
+
+        var r = m.CustomKeyEvent(0x7C, true);
+
+        Assert.False(r.Swallow);                          // 纯监听：该键原有行为必须照常发生
+        Assert.True(Has(r.Effects, HookEffect.StartHoldTimer));
+        Assert.Equal(TriggerKind.Custom, m.ArmedKind);
+        Assert.False(m.IsFired);
+    }
+
+    [Fact]
+    public void CustomKeyDown_WhileOtherTriggerArmed_IsIgnored()
+    {
+        var m = Machine(customKeys: [0x7C]);
+        m.CtrlEvent(true);
+
+        var r = m.CustomKeyEvent(0x7C, true);
+
+        Assert.Equal(HookEffect.None, r.Effects);
+        Assert.Equal(TriggerKind.Ctrl, m.ArmedKind);
+    }
+
+    [Fact]
+    public void CustomKeyTap_EndsGestureWithoutExecuting()
+    {
+        var m = Machine(customKeys: [0x7C]);
+        m.CustomKeyEvent(0x7C, true);
+
+        var r = m.CustomKeyEvent(0x7C, false);
+
+        Assert.False(r.Swallow);
+        Assert.True(Has(r.Effects, HookEffect.StopHoldTimer));
+        Assert.False(Has(r.Effects, HookEffect.HideWheelAndExecute));
+        Assert.False(m.IsArmed);
+    }
+
+    [Fact]
+    public void CustomKeyHeld_AfterWheelShown_ReleaseExecutes()
+    {
+        var m = Machine(customKeys: [0x7C]);
+        ShowWheelByHolding(m, TriggerKind.Custom);
+
+        Assert.True(m.IsFired);
+
+        var r = m.CustomKeyEvent(0x7C, false);
+
+        Assert.True(Has(r.Effects, HookEffect.HideWheelAndExecute));
+        Assert.False(r.Swallow);
+    }
+
+    /// <summary>
+    /// 松开“另一个”自定义键不能结束当前手势 —— 否则先按住 F13、再顺手摸一下 Shift，
+    /// 轮盘就会提前收掉并触发执行。
+    /// </summary>
+    [Fact]
+    public void CustomKeyUp_ForDifferentKey_KeepsGestureArmed()
+    {
+        var m = Machine(customKeys: [0x7C, 0x10]);        // F13 与 Shift
+        m.CustomKeyEvent(0x7C, true);
+
+        var r = m.CustomKeyEvent(0x10, false);
+
+        Assert.Equal(HookEffect.None, r.Effects);
+        Assert.Equal(TriggerKind.Custom, m.ArmedKind);
+        Assert.True(Has(m.HoldElapsed(), HookEffect.EvaluateTrigger));
+    }
+
+    /// <summary>
+    /// 已经有一个触发键在武装时，第二个自定义键按下不参与 —— 与 Ctrl / Win / Alt / 中键一致，
+    /// 仍然是“第一个按下的赢”，而不是把当前手势取消掉。
+    /// </summary>
+    [Fact]
+    public void CustomKeyDown_SecondKeyWhileArmed_IsIgnored()
+    {
+        var m = Machine(customKeys: [0x7C, 0x10]);
+        m.CustomKeyEvent(0x7C, true);
+
+        var r = m.CustomKeyEvent(0x10, true);
+
+        Assert.Equal(HookEffect.None, r.Effects);
+        Assert.Equal(TriggerKind.Custom, m.ArmedKind);
+        Assert.True(Has(m.HoldElapsed(), HookEffect.EvaluateTrigger));
+    }
+
+    /// <summary>被忽略的那次按下，它的松开也不能结束当前手势。</summary>
+    [Fact]
+    public void CustomKeyUp_ForIgnoredKey_KeepsGestureArmed()
+    {
+        var m = Machine(customKeys: [0x7C, 0x10]);
+        m.CustomKeyEvent(0x7C, true);
+        m.CustomKeyEvent(0x10, true);        // 被忽略
+
+        var r = m.CustomKeyEvent(0x10, false);
+
+        Assert.Equal(HookEffect.None, r.Effects);
+        Assert.Equal(TriggerKind.Custom, m.ArmedKind);
+    }
+
+    [Fact]
+    public void CustomKey_ResetState_ClearsArmedKeySoNextGestureWorks()
+    {
+        var m = Machine(customKeys: [0x7C]);
+        m.CustomKeyEvent(0x7C, true);
+        m.ResetState();
+
+        Assert.False(m.IsArmed);
+
+        // 重新武装一个“别的”自定义键：不能被上一轮的残留键码挡住
+        m.CustomKeyEvent(0x10, true);
+        Assert.Equal(TriggerKind.Custom, m.ArmedKind);
+        Assert.True(Has(m.HoldElapsed(), HookEffect.EvaluateTrigger));
+    }
+
+    [Fact]
+    public void CustomKey_ComboWithOtherKey_CancelsPendingTrigger()
+    {
+        var m = Machine(customKeys: [0x10]);              // Shift 作触发键
+        m.CustomKeyEvent(0x10, true);
+
+        var r = m.OtherKeyDown();                         // 例如 Shift+A
+
+        Assert.True(Has(r.Effects, HookEffect.StopHoldTimer));
+        Assert.False(Has(m.HoldElapsed(), HookEffect.EvaluateTrigger));
+    }
+
+    // ==================== 鼠标中键：轻点 / 拖动 / 接管 ====================    // ==================== 鼠标中键：轻点 / 拖动 / 接管 ====================
 
     [Fact]
     public void MiddleDown_ArmsAndPassesThrough()

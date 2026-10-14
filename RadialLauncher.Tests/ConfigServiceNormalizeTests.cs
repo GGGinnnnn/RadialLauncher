@@ -135,6 +135,78 @@ public class ConfigServiceNormalizeTests
         Assert.True(config.Trigger.ByWin);
     }
 
+    [Fact]
+    public void Normalize_KeepsCtrlWhenOnlyAltIsEnabled()
+    {
+        var config = new AppConfig();
+        config.Trigger.ByCtrl = false;
+        config.Trigger.ByWin = false;
+        config.Trigger.ByAlt = true;
+        config.Trigger.ByMiddleMouse = false;
+
+        ConfigService.Normalize(config);
+
+        Assert.False(config.Trigger.ByCtrl);
+        Assert.True(config.Trigger.ByAlt);   // Alt 也是有效触发键，不该被回填成 Ctrl
+    }
+
+    [Fact]
+    public void Normalize_KeepsCtrlWhenOnlyCustomKeyIsConfigured()
+    {
+        var config = new AppConfig();
+        config.Trigger.ByCtrl = false;
+        config.Trigger.ByWin = false;
+        config.Trigger.ByAlt = false;
+        config.Trigger.ByMiddleMouse = false;
+        config.Trigger.CustomTriggerKeys = ["F13"];
+
+        ConfigService.Normalize(config);
+
+        Assert.False(config.Trigger.ByCtrl);   // 有自定义触发键，不需要回填
+        Assert.Equal(["F13"], config.Trigger.CustomTriggerKeys);
+    }
+
+    [Fact]
+    public void Normalize_BackfillsCtrlWhenCustomKeysAreAllUnusable()
+    {
+        // 全是垃圾名字时不能算“用户配了自定义键”，否则一个能用的触发键都不剩
+        var config = new AppConfig();
+        config.Trigger.ByCtrl = false;
+        config.Trigger.ByWin = false;
+        config.Trigger.ByAlt = false;
+        config.Trigger.ByMiddleMouse = false;
+        config.Trigger.CustomTriggerKeys = ["Ctrl", "NoSuchKey", ""];
+
+        ConfigService.Normalize(config);
+
+        Assert.Empty(config.Trigger.CustomTriggerKeys);
+        Assert.True(config.Trigger.ByCtrl);
+    }
+
+    [Fact]
+    public void Normalize_SanitizesCustomTriggerKeys()
+    {
+        var config = new AppConfig();
+        config.Trigger.CustomTriggerKeys = ["  F13 ", "Esc", "PageUp", "PgUp", "Nope"];
+
+        ConfigService.Normalize(config);
+
+        Assert.Equal(["F13", "PageUp"], config.Trigger.CustomTriggerKeys);
+    }
+
+    [Fact]
+    public void Normalize_NullCustomTriggerKeys_BecomesEmptyList()
+    {
+        // config.json 里写 "CustomTriggerKeys": null 时反序列化会得到 null
+        var config = new AppConfig();
+        config.Trigger.CustomTriggerKeys = null!;
+
+        ConfigService.Normalize(config);
+
+        Assert.NotNull(config.Trigger.CustomTriggerKeys);
+        Assert.Empty(config.Trigger.CustomTriggerKeys);
+    }
+
     [Theory]
     [InlineData(null, "zh-CN")]
     [InlineData("", "zh-CN")]
@@ -262,16 +334,19 @@ public class ConfigServiceNormalizeTests
         config.Trigger.ByWin = false;
         config.Trigger.ByMiddleMouse = false;
         config.Trigger.HoldThresholdMs = -10;
+        config.Trigger.CustomTriggerKeys = ["  F13 ", "PgUp", "PageUp", "Ctrl"];
 
         ConfigService.Normalize(config);
         var first = (config.Appearance.ItemCount, config.Appearance.Scale,
                      config.Appearance.ItemSize, config.Appearance.DeadZone,
-                     config.Appearance.Opacity, config.Trigger.HoldThresholdMs);
+                     config.Appearance.Opacity, config.Trigger.HoldThresholdMs,
+                     string.Join(",", config.Trigger.CustomTriggerKeys));
 
         ConfigService.Normalize(config);
         var second = (config.Appearance.ItemCount, config.Appearance.Scale,
                       config.Appearance.ItemSize, config.Appearance.DeadZone,
-                      config.Appearance.Opacity, config.Trigger.HoldThresholdMs);
+                      config.Appearance.Opacity, config.Trigger.HoldThresholdMs,
+                      string.Join(",", config.Trigger.CustomTriggerKeys));
 
         Assert.Equal(first, second);
     }
