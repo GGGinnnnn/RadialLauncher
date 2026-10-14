@@ -25,7 +25,13 @@ namespace RadialLauncher.Services
             var env = config.Environment;
             var appearance = config.Appearance;
 
-            if (env.ProfilesEnabled)
+            // 桌面、任务栏这些 shell 表面同样由 explorer.exe 承载（窗口类 Progman /
+            // WorkerW / Shell_TrayWnd），只比进程名会把它们当成「资源管理器」，
+            // 于是在桌面上唤出的是文件夹专用轮盘（Alt+D / Ctrl+E / Delete 在这里都是错的动作）。
+            // IsShell 在探测层（WindowDetectorService.Query → ShellWindowDetection.Classify）
+            // 已经算好，这里一律退回全局轮盘；
+            // 真正的资源管理器窗口（窗口类 CabinetWClass）IsShell 为 false，不受影响。
+            if (env.ProfilesEnabled && !info.IsShell)
             {
                 foreach (var profile in config.Profiles)
                 {

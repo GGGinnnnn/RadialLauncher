@@ -14,12 +14,34 @@ namespace RadialLauncher.Services
         public string ProcessName { get; init; } = "";
         public string Title { get; init; } = "";
         public string ClassName { get; init; } = "";
-        public bool IsFullscreen { get; init; }
-        public bool IsShell { get; init; }
 
+        /// <summary>所属的 shell 表面类别；<see cref="ShellSurface.None"/> 表示普通应用窗口。</summary>
+        public ShellSurface Shell { get; init; }
+
+        public bool IsFullscreen { get; init; }
+
+        /// <summary>
+        /// 是否属于 shell 表面（桌面 / 任务栏等）。
+        /// 由 <see cref="Shell"/> 推导、**刻意不提供 setter**：单一事实来源，
+        /// 免得出现「Shell 说是桌面、IsShell 说不是」这种自相矛盾的快照。
+        /// </summary>
+        public bool IsShell => Shell != ShellSurface.None;
+
+        /// <summary>技术展示：进程名（或「进程名 - 标题」）。日志与排障用这个。</summary>
         public string Display => string.IsNullOrEmpty(Title)
             ? ProcessName
             : $"{ProcessName} - {Title}";
+
+        /// <summary>
+        /// 界面展示用名称。shell 表面没有窗口标题，只显示 explorer 看不出是什么；
+        /// 桌面 / 任务栏给本地化名称，其余（通知区浮出层、普通窗口）沿用 <see cref="Display"/>。
+        /// </summary>
+        public string DisplayName => Shell switch
+        {
+            ShellSurface.Desktop => Loc.T("General_ForegroundDesktop"),
+            ShellSurface.Taskbar => Loc.T("General_ForegroundTaskbar"),
+            _ => Display,
+        };
     }
 
     /// <summary>可加入白/黑名单的窗口条目。</summary>
@@ -111,7 +133,7 @@ namespace RadialLauncher.Services
                     Title = title.ToString(),
                     ClassName = className,
                     IsFullscreen = CheckFullscreen(hwnd),
-                    IsShell = IsShellWindow(procName, className),
+                    Shell = ShellWindowDetection.Classify(procName, className),
                 };
             }
             catch (Exception ex)
@@ -119,14 +141,6 @@ namespace RadialLauncher.Services
                 Logger.Debug("查询前台窗口失败：" + ex.Message);
                 return new ForegroundWindowInfo();
             }
-        }
-
-        private bool IsShellWindow(string processName, string className)
-        {
-            if (className is "Progman" or "WorkerW" or "Shell_TrayWnd" or "Shell_SecondaryTrayWnd")
-                return true;
-            return string.Equals(processName, "explorer", StringComparison.OrdinalIgnoreCase)
-                   && className.StartsWith("Shell_", StringComparison.OrdinalIgnoreCase);
         }
 
         /// <summary>

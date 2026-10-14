@@ -263,7 +263,7 @@ namespace RadialLauncher.Views
             var info = _host.Detector.GetCurrent();
             TxtStatusForeground.Text = string.IsNullOrEmpty(info.ProcessName)
                 ? Loc.T("Common_None")
-                : info.Display;
+                : info.DisplayName;
 
             TxtGeneralHint.Text = string.Format(Loc.T("General_Hint"), _working.Trigger.HoldThresholdMs);
         }

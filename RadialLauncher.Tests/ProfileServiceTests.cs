@@ -7,10 +7,17 @@ namespace RadialLauncher.Tests;
 /// <summary>ProfileService 的路由逻辑：全局轮盘 vs 应用专属轮盘。</summary>
 public class ProfileServiceTests
 {
-    private static ForegroundWindowInfo Info(string process, string title = "") => new()
+    private static ForegroundWindowInfo Info(
+        string process,
+        string title = "",
+        string className = "") => new()
     {
         ProcessName = process,
         Title = title,
+        ClassName = className,
+        // Shell 一律走真实判定，测试里不自己编一个 IsShell 出来 ——
+        // 否则验的是「我以为的分类」，而不是被测代码实际看到的东西。
+        Shell = ShellWindowDetection.Classify(process, className),
     };
 
     private static AppConfig MakeConfig(
@@ -315,6 +322,66 @@ public class ProfileServiceTests
         var config = MakeConfig(profilesEnabled: true, profiles: new() { profile });
 
         Assert.Null(ProfileService.FindByProcess(config, target!));
+    }
+
+    // ==================== shell 界面（桌面 / 任务栏） ====================
+
+    /// <summary>
+    /// 回归：桌面与任务栏也由 explorer.exe 承载，但它们是 shell 表面、不是资源管理器窗口。
+    /// Shell 非 None 时必须退回全局轮盘，否则在桌面上会唤出文件夹专用轮盘。
+    /// 窗口类名直接喂给真实判定函数，两层任何一层退化都会让用例变红。
+    /// </summary>
+    [Theory]
+    [InlineData("Progman", ShellSurface.Desktop)]                 // 桌面
+    [InlineData("WorkerW", ShellSurface.Desktop)]                 // 桌面（壁纸幻灯片 / 动态壁纸）
+    [InlineData("Shell_TrayWnd", ShellSurface.Taskbar)]           // 主任务栏
+    [InlineData("Shell_SecondaryTrayWnd", ShellSurface.Taskbar)]  // 扩展屏任务栏
+    public void Resolve_FallsBackToGlobalWheelForShellSurfaces(string className, ShellSurface expected)
+    {
+        var profile = new AppProfile
+        {
+            Name = "资源管理器",
+            ProcessNames = new() { "explorer" },
+            Items = new() { new WheelItem { Name = "地址栏" } },
+        };
+
+        var config = MakeConfig(profilesEnabled: true, profiles: new() { profile });
+
+        var info = Info("explorer", "", className);
+        Assert.Equal(expected, info.Shell);   // 前提：这类窗口确实被判成 shell 表面
+        Assert.True(info.IsShell);
+
+        var wheel = ProfileService.Resolve(config, info);
+
+        Assert.False(wheel.IsProfile);
+        Assert.Null(wheel.Profile);
+        Assert.Empty(wheel.Title);
+        Assert.Same(config.WheelItems, wheel.Items);
+    }
+
+    /// <summary>
+    /// 反向保护：真正的资源管理器窗口（窗口类 CabinetWClass，IsShell=false）必须仍命中
+    /// 专属配置，防止上面的修复被扩大成“进程名是 explorer 就一律不匹配”。
+    /// </summary>
+    [Fact]
+    public void Resolve_StillMatchesExplorerProfileForRealExplorerWindows()
+    {
+        var profileItems = new List<WheelItem> { new() { Name = "地址栏" } };
+        var profile = new AppProfile
+        {
+            Name = "资源管理器",
+            ProcessNames = new() { "explorer" },
+            Items = profileItems,
+        };
+
+        var config = MakeConfig(profilesEnabled: true, profiles: new() { profile });
+        var wheel = ProfileService.Resolve(
+            config, Info("explorer", "下载", "CabinetWClass"));
+
+        Assert.True(wheel.IsProfile);
+        Assert.Same(profile, wheel.Profile);
+        Assert.Same(profileItems, wheel.Items);
+        Assert.Equal("资源管理器", wheel.Title);
     }
 
     // ==================== ActiveWheel 属性 ====================
