@@ -10,9 +10,16 @@
 # 发布目录和压缩包体积很大（每个约 45 MB / 解压后 146 MB），
 # 不进版本库，需要的话放在 GitHub Release 里。
 release/
+build/
 *.7z
 *.zip
 *.rar
+*.msix
+*.msixbundle
+*.pfx
+
+# Visual Studio 生成的 MSIX 资源缓存（可重建）
+*.assets.cache
 
 # ================= 测试 =================
 TestResults/
