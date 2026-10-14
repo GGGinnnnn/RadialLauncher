@@ -53,11 +53,12 @@ Windows 10 / 11（64 位）· .NET 8 · WPF · 免安装
 
 ## 快速开始
 
-到 [Releases](../../releases) 下载。三种包功能完全一样，只是打包方式不同：
+到 [Releases](../../releases) 下载。四种包功能完全一样，只是打包方式不同：
 
 | 形态 | 体积 | 要装 .NET 吗 | 说明 |
 | --- | --- | --- | --- |
 | **单文件 exe**（推荐） | 约 64 MB | 不用 | 只有一个文件，双击即用，最省事 |
+| 单文件 exe（不含运行时） | 约 1.8 MB | **要装 .NET 8 桌面运行时** | 体积只有 1/35，适合已装运行时、想省流量的人 |
 | 便携 7z | 约 46 MB | 不用 | 解压成文件夹，便于留档 / 带走 |
 | MSIX 安装包 | 约 64 MB | 不用 | 进开始菜单，可从「应用」里卸载 |
 
@@ -66,14 +67,30 @@ Windows 10 / 11（64 位）· .NET 8 · WPF · 免安装
 首次启动会先自解压到 `%TEMP%\.net\`，慢一两秒，之后就正常了；在 exe 旁边放一个空的
 `portable.marker` 就能切成便携模式（见「数据目录」）。
 
-**② 便携 7z** —— 下载 `RadialLauncher-v0.3-portable.7z`，解压到任意固定位置，
+**② 单文件版 · 不含运行时** —— 下载 `RadialLauncher-v0.3-noruntime.exe`，用法同上，
+但**不带 .NET 运行时**，所以整包只有约 1.8 MB。
+
+动手前先确认目标机装没装 .NET 8 桌面运行时：
+
+```powershell
+dotnet --list-runtimes | Select-String WindowsDesktop
+# 有 Microsoft.WindowsDesktop.App 8.x 就行
+```
+
+没装的话到 [.NET 8 下载页](https://dotnet.microsoft.com/download/dotnet/8.0)
+装 **Desktop Runtime (x64)**（不是 ASP.NET Core Runtime）。缺运行时不会有任何提示文字，
+只会弹一个 "To run this application, you must install .NET Desktop Runtime" 的对话框 ——
+看到它就说明装错了包，换 ① 即可。
+
+**③ 便携 7z** —— 下载 `RadialLauncher-v0.3-portable.7z`，解压到任意固定位置，
 双击里面的 `RadialLauncher.exe`。
 
-**③ MSIX 安装包** —— 下载 `RadialLauncher_0.3.0.0_x64.msix` 和配套的
+**④ MSIX 安装包** —— 下载 `RadialLauncher_0.3.0.0_x64.msix` 和配套的
 `RadialLauncher_Test.cer`，**先把 `.cer` 导入「本地计算机 → 受信任人」**
 （`LocalMachine\TrustedPeople`，导到「当前用户」不管用），再双击 `.msix` 安装。
 
-> 三种包都是**自包含**的，已经带了完整的 .NET 运行时，不需要另外安装 .NET。
+> 除了 ②，其余三种都是**自包含**的，已经带了完整的 .NET 运行时，不需要另外安装 .NET。
+> ② 是同一个程序的"瘦身版"：省掉运行时那一份体积，代价是目标机得自己先装好。
 
 **上手**：在任意窗口按住 `Ctrl` 约 0.2 秒 → 轮盘弹出 → 移动鼠标选中 → 松开执行，
 按 `Esc` 取消。右键托盘图标打开菜单，双击托盘图标直接打开设置面板。
@@ -143,14 +160,25 @@ dotnet publish RadialLauncher/RadialLauncher.csproj \
 # 单文件 exe：产物只有一个文件，约 140 MB
 dotnet publish RadialLauncher/RadialLauncher.csproj \
   -c Release -r win-x64 -p:SingleFilePublish=true -o build/publish/single
+
+# 单文件 exe · 不含运行时（和 Release 里的 -noruntime.exe 一致）：约 1.8 MB
+dotnet publish RadialLauncher/RadialLauncher.csproj \
+  -c Release -r win-x64 -p:SingleFilePublish=true -p:NoRuntimePublish=true \
+  -o build/publish/noruntime
 ```
 
-单文件发布还可以叠加两个开关（注释就在 `RadialLauncher.csproj` 里）：
+发布形态开关（注释就在 `RadialLauncher.csproj` 里）：
 
 | 开关 | 效果 |
 | --- | --- |
-| `-p:SingleFileCompress=true` | 压到约 64 MB，代价是首次启动多约 1 秒解压 |
-| `-p:SelfContained=false` | 只有约 1.7 MB，但目标机必须预装 .NET 8 桌面运行时 |
+| `-p:SingleFilePublish=true` | 打成单文件，约 140 MB |
+| `-p:SingleFileCompress=true` | 再压到约 64 MB，代价是首次启动多约 1 秒解压 |
+| `-p:NoRuntimePublish=true` | **不含运行时**：单文件约 1.8 MB，散装约 1.8 MB（8 个文件）。目标机必须预装 .NET 8 桌面运行时 |
+
+`NoRuntimePublish` 会覆盖 `SingleFilePublish` 里默认打开的 `SelfContained`，所以两个开关
+可以叠着用 —— 上面那条命令出来的就是单文件的瘦身版。它本质上是
+`-p:SelfContained=false` 换了个名字（后者照旧可用），起名字只是为了让"不含运行时"
+能像单文件一样、当成一个有名有姓的发布形态来记，不用每次去记该关哪个底层属性。
 
 用 Visual Studio 或 Rider 直接打开 `RadialLauncher.slnx` 也可以。
 `MSIX Packaging/` 是 MSIX 打包工程，`dotnet` CLI 编不动它（缺 DesktopBridge 任务），
@@ -204,4 +232,4 @@ RadialLauncher.Tests/   xUnit 单元测试（约 450 个）
 你可以自由地使用、修改、再分发，前提是分发时**一并提供源代码**、保留同样的许可，
 并且不附加任何额外限制。本程序**不含任何担保**。
 
-> 发布的是二进制包（单文件 exe / 便携 7z / MSIX），完整源码就在本仓库。
+> 发布的是二进制包（单文件 exe / 单文件 exe 不含运行时 / 便携 7z / MSIX），完整源码就在本仓库。

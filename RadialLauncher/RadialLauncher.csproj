@@ -58,6 +58,29 @@
 		<EnableCompressionInSingleFile>true</EnableCompressionInSingleFile>
 	</PropertyGroup>
 
+	<!-- ================= 不含运行时的发布版本（框架依赖 / FDD） =================
+	     体积从约 64 MB 掉到约 1.8 MB，代价是目标机必须预装
+	     「.NET 8 桌面运行时（Desktop Runtime, x64）」—— 没装的话双击只会弹一个
+	     "To run this application, you must install .NET Desktop Runtime" 的对话框。
+
+	     用法（单文件，和 Release 里的 -noruntime.exe 一致）：
+	       dotnet publish RadialLauncher/RadialLauncher.csproj -c Release -r win-x64 \
+	         -p:SingleFilePublish=true -p:NoRuntimePublish=true \
+	         -o build/publish/noruntime
+
+	     用法（散装文件夹，约 1.8 MB / 十几个文件）：
+	       dotnet publish RadialLauncher/RadialLauncher.csproj -c Release -r win-x64 \
+	         -p:NoRuntimePublish=true -o build/publish/noruntime-portable
+
+	     本块刻意排在 SingleFilePublish 之后：MSBuild 同名属性后写者胜，
+	     单文件那一块写下的 <SelfContained>true</SelfContained> 会被这里的 false 覆盖。
+	     单独传 -p:SelfContained=false 本就能达到同样效果，这个开关只是为了让
+	     “不含运行时”成为一个有名有姓、与 SingleFilePublish 并列的发布形态，
+	     免得每次都要记住该关哪个底层属性。 -->
+	<PropertyGroup Condition="'$(NoRuntimePublish)' == 'true'">
+		<SelfContained>false</SelfContained>
+	</PropertyGroup>
+
 	<!-- Release：把调试符号嵌进程序集，发布目录里就不会多出 .pdb -->
 	<PropertyGroup Condition="'$(Configuration)' == 'Release'">
 		<DebugType>embedded</DebugType>
