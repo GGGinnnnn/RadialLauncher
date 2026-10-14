@@ -30,6 +30,31 @@
 		<PublishTrimmed>false</PublishTrimmed>
 	</PropertyGroup>
 
+	<!-- ================= 单文件发布（可选形态） =================
+	     日常 build / MSIX 打包都不受影响：这些属性只在显式传
+	     -p:SingleFilePublish=true 时生效。
+
+	     用法：
+	       dotnet publish RadialLauncher/RadialLauncher.csproj -c Release -r win-x64 \
+	         -p:SingleFilePublish=true -o build/publish/RadialLauncher-singlefile
+
+	     想再压体积就叠加 -p:SingleFileCompress=true（首次启动多一次解压，约 1~2 秒）。 -->
+	<PropertyGroup Condition="'$(SingleFilePublish)' == 'true'">
+		<!-- 自包含：目标机不需要预装 .NET 8 桌面运行时。
+		     想改发布成「依赖运行时」的瘦身版，传 -p:SelfContained=false 即可。 -->
+		<SelfContained Condition="'$(SelfContained)' == ''">true</SelfContained>
+		<PublishSingleFile>true</PublishSingleFile>
+		<!-- WPF 的原生库（wpfgfx_cor3 / PresentationNative_cor3 / D3DCompiler_47_cor3）
+		     必须走自解压，否则它们不会被塞进单文件里 -->
+		<IncludeNativeLibrariesForSelfExtract>true</IncludeNativeLibrariesForSelfExtract>
+		<!-- 单文件不能同时裁剪（WPF 本就裁不了），这里再兜一层 -->
+		<PublishTrimmed>false</PublishTrimmed>
+	</PropertyGroup>
+
+	<PropertyGroup Condition="'$(SingleFileCompress)' == 'true'">
+		<EnableCompressionInSingleFile>true</EnableCompressionInSingleFile>
+	</PropertyGroup>
+
 	<!-- Release：把调试符号嵌进程序集，发布目录里就不会多出 .pdb -->
 	<PropertyGroup Condition="'$(Configuration)' == 'Release'">
 		<DebugType>embedded</DebugType>
