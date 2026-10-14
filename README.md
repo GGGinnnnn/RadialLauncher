@@ -1,6 +1,6 @@
 # Radial Launcher
 
-按住 **Ctrl** / **Win** / **鼠标中键**，在鼠标位置唤出的轮盘启动器。
+按住 **Ctrl** / **Win** / **Alt** / **鼠标中键**，或**任意自定义按键**，在鼠标位置唤出的轮盘启动器。
 
 Windows 10 / 11（64 位）· .NET 8 · WPF · 免安装
 
@@ -33,7 +33,8 @@ Windows 10 / 11（64 位）· .NET 8 · WPF · 免安装
 
 ## 功能
 
-- **触发环境** — Ctrl / Win / 鼠标中键可多选；按住时长可调；
+- **触发环境** — Ctrl / Win / Alt / 鼠标中键可多选，还能挑任意单键（Shift、F13、CapsLock…）当触发键；
+  按住时长可调；
   黑白名单按进程名或窗口标题决定哪些窗口能唤出；全屏程序（游戏）自动跳过。
 - **7 种功能类型** — 启动应用 / 打开文件夹 / 打开网址 / Windows 快捷键 /
   执行命令 / 运行脚本 / 内置功能。
@@ -62,12 +63,12 @@ Windows 10 / 11（64 位）· .NET 8 · WPF · 免安装
 | 便携 7z | 约 46 MB | 不用 | 解压成文件夹，便于留档 / 带走 |
 | MSIX 安装包 | 约 64 MB | 不用 | 进开始菜单，可从「应用」里卸载 |
 
-**① 单文件版（推荐）** —— 下载 `RadialLauncher-v0.4.exe`，放到任意固定目录
+**① 单文件版（推荐）** —— 下载 `RadialLauncher-v0.5.exe`，放到任意固定目录
 （**不要**放临时目录），双击运行。程序不显示主窗口，只在托盘出现一个蓝色轮盘图标。
 首次启动会先自解压到 `%TEMP%\.net\`，慢一两秒，之后就正常了；在 exe 旁边放一个空的
 `portable.marker` 就能切成便携模式（见「数据目录」）。
 
-**② 单文件版 · 不含运行时** —— 下载 `RadialLauncher-v0.4-noruntime.exe`，用法同上，
+**② 单文件版 · 不含运行时** —— 下载 `RadialLauncher-v0.5-noruntime.exe`，用法同上，
 但**不带 .NET 运行时**，所以整包只有约 1.8 MB。
 
 动手前先确认目标机装没装 .NET 8 桌面运行时：
@@ -82,10 +83,10 @@ dotnet --list-runtimes | Select-String WindowsDesktop
 只会弹一个 "To run this application, you must install .NET Desktop Runtime" 的对话框 ——
 看到它就说明装错了包，换 ① 即可。
 
-**③ 便携 7z** —— 下载 `RadialLauncher-v0.4-portable.7z`，解压到任意固定位置，
+**③ 便携 7z** —— 下载 `RadialLauncher-v0.5-portable.7z`，解压到任意固定位置，
 双击里面的 `RadialLauncher.exe`。
 
-**④ MSIX 安装包** —— 下载 `RadialLauncher_0.4.0.0_x64.msix` 和配套的
+**④ MSIX 安装包** —— 下载 `RadialLauncher_0.5.0.0_x64.msix` 和配套的
 `RadialLauncher_Test.cer`，**先把 `.cer` 导入「本地计算机 → 受信任人」**
 （`LocalMachine\TrustedPeople`，导到「当前用户」不管用），再双击 `.msix` 安装。
 

@@ -28,6 +28,7 @@ namespace RadialLauncher.Views
 
         private readonly ObservableCollection<WindowEntry> _windows = new();
         private readonly ObservableCollection<string> _blacklist = new();
+        private readonly ObservableCollection<string> _customKeys = new();
         private readonly ObservableCollection<string> _whitelist = new();
         private readonly ObservableCollection<AppProfile> _profiles = new();
         private readonly ObservableCollection<SlotEntry> _slots = new();
@@ -106,6 +107,8 @@ namespace RadialLauncher.Views
             LstWindows.ItemsSource = _windows;
             LstBlack.ItemsSource = _blacklist;
             LstWhite.ItemsSource = _whitelist;
+            LstCustomKeys.ItemsSource = _customKeys;
+            BuildCustomKeyCombo();
             LstSlots.ItemsSource = _slots;
             LstProfiles.ItemsSource = _profiles;
 
@@ -139,7 +142,13 @@ namespace RadialLauncher.Views
                 CbTriggerEnabled.IsChecked = c.Trigger.Enabled;
                 CbCtrl.IsChecked = c.Trigger.ByCtrl;
                 CbWin.IsChecked = c.Trigger.ByWin;
+                CbAlt.IsChecked = c.Trigger.ByAlt;
                 CbMiddle.IsChecked = c.Trigger.ByMiddleMouse;
+
+                _customKeys.Clear();
+                foreach (var key in c.Trigger.CustomTriggerKeys) _customKeys.Add(key);
+                BuildCustomKeyCombo();
+                CmbCustomKey.Text = "";
                 SldHold.Value = c.Trigger.HoldThresholdMs;
                 TxtHoldValue.Text = c.Trigger.HoldThresholdMs + " ms";
                 CbSuppressWin.IsChecked = c.Trigger.SuppressWinKey;
@@ -208,7 +217,7 @@ namespace RadialLauncher.Views
             else LoadProfileEditor();
         }
 
-        /// <summary>读取 InformationalVersion（csproj 里设成 0.4），显示为 v0.4。</summary>
+        /// <summary>读取 InformationalVersion（csproj 里设成 0.5），显示为 v0.5。</summary>
         private static string GetVersionText()
         {
             var assembly = typeof(App).Assembly;
@@ -249,7 +258,9 @@ namespace RadialLauncher.Views
             var keys = new List<string>();
             if (c.Trigger.ByCtrl) keys.Add("Ctrl");
             if (c.Trigger.ByWin) keys.Add("Win");
+            if (c.Trigger.ByAlt) keys.Add("Alt");
             if (c.Trigger.ByMiddleMouse) keys.Add(Loc.Pick("鼠标中键", "Middle mouse"));
+            foreach (var key in CustomTriggerKeys.Normalize(_customKeys)) keys.Add(key);
             if (keys.Count == 0) keys.Add(Loc.T("Common_None"));
 
             TxtStatusKeys.Text = (_host.IsRunning ? Loc.T("General_Running") : Loc.T("General_NotRunning"))
@@ -341,6 +352,70 @@ namespace RadialLauncher.Views
         private void OnRemoveWhitelist(object sender, RoutedEventArgs e)
         {
             if (LstWhite.SelectedItem is string value) _whitelist.Remove(value);
+        }
+
+        // ---------- 自定义触发键 ----------
+
+        /// <summary>下拉框内容：推荐键名 + 当前已选（已选的也列出来，便于辨认）。</summary>
+        private void BuildCustomKeyCombo()
+        {
+            CmbCustomKey.Items.Clear();
+            foreach (var key in CustomTriggerKeys.Suggestions) CmbCustomKey.Items.Add(key);
+            foreach (var key in _customKeys)
+            {
+                if (!CmbCustomKey.Items.Contains(key)) CmbCustomKey.Items.Add(key);
+            }
+        }
+
+        /// <summary>
+        /// 添加一个自定义触发键。
+        ///
+        /// 这里**不弹对话框**：面板打开期间钩子处于暂停状态，弹窗会抢焦点、
+        /// 让用户以为程序卡了；把失败原因写在下方的提示行里更直接。
+        /// </summary>
+        private void OnAddCustomKey(object sender, RoutedEventArgs e)
+        {
+            if (!CanHandleEvents) return;
+
+            var name = (CmbCustomKey.Text ?? "").Trim();
+
+            if (!CustomTriggerKeys.IsAllowed(name))
+            {
+                TxtCustomKeyHint.Text = string.Format(Loc.T("Trigger_CustomInvalid"), name);
+                return;
+            }
+
+            // 名额按“名字”数（Shift 展开成左右键码也只占 1 个名额）；
+            // 判重按“虚拟键码”，因为同一个键可能有多个名字（PageUp / PgUp）。
+            if (_customKeys.Count >= CustomTriggerKeys.MaxCount)
+            {
+                TxtCustomKeyHint.Text = string.Format(Loc.T("Trigger_CustomFull"), CustomTriggerKeys.MaxCount);
+                return;
+            }
+
+            var existingVks = CustomTriggerKeys.ToVks(_customKeys);
+            var addedVks = CustomTriggerKeys.ToVks([name]);
+            if (addedVks.Any(vk => existingVks.Contains(vk)))
+            {
+                TxtCustomKeyHint.Text = string.Format(Loc.T("Trigger_CustomDuplicate"), name);
+                return;
+            }
+
+            _customKeys.Add(name);
+            CmbCustomKey.Text = "";
+            TxtCustomKeyHint.Text = Loc.T("Trigger_CustomHint");
+
+            UpdateStatus();
+        }
+
+        private void OnRemoveCustomKey(object sender, RoutedEventArgs e)
+        {
+            if (!CanHandleEvents) return;
+            if (LstCustomKeys.SelectedItem is not string value) return;
+            if (!_customKeys.Remove(value)) return;
+
+            TxtCustomKeyHint.Text = Loc.T("Trigger_CustomHint");
+            UpdateStatus();
         }
 
         // ============================================================
@@ -1486,7 +1561,9 @@ namespace RadialLauncher.Views
             c.Trigger.Enabled = CbTriggerEnabled.IsChecked == true;
             c.Trigger.ByCtrl = CbCtrl.IsChecked == true;
             c.Trigger.ByWin = CbWin.IsChecked == true;
+            c.Trigger.ByAlt = CbAlt.IsChecked == true;
             c.Trigger.ByMiddleMouse = CbMiddle.IsChecked == true;
+            c.Trigger.CustomTriggerKeys = _customKeys.ToList();
             c.Trigger.HoldThresholdMs = (int)Math.Round(SldHold.Value);
             c.Trigger.SuppressWinKey = CbSuppressWin.IsChecked == true;
             c.Trigger.SuppressMiddleClick = CbSuppressMiddle.IsChecked == true;

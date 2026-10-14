@@ -8,7 +8,11 @@ namespace RadialLauncher.Services
         None,
         Ctrl,
         Win,
+        Alt,
         Middle,
+
+        /// <summary>用户自定义的触发键（Shift / F13 / CapsLock 等，见 CustomTriggerKeys）。</summary>
+        Custom,
     }
 
     /// <summary>
@@ -126,6 +130,17 @@ namespace RadialLauncher.Services
         /// <summary>是否监听 Win。</summary>
         public bool ListenWin { get; set; }
 
+        /// <summary>是否监听 Alt (Menu/LeftAlt)。</summary>
+        public bool ListenAlt { get; set; }
+
+        /// <summary>
+        /// 自定义触发键的虚拟键码。这些键与 Ctrl / Alt 一样**只观察、不拦截**：
+        /// 它们本身就带着应用/系统行为（CapsLock 切换大小写、F1 求助、Shift 参与打字），
+        /// 一旦拦截就必须为每一种键补发“轻点/组合键”，代价与风险都远高于收益。
+        /// 需要拦截的是 Win 与鼠标中键，它们各有专门的分支。
+        /// </summary>
+        public int[] CustomTriggerKeys { get; set; } = [];
+
         /// <summary>是否监听鼠标中键。</summary>
         public bool ListenMiddle { get; set; }
 
@@ -153,6 +168,9 @@ namespace RadialLauncher.Services
         private TriggerKind _armed = TriggerKind.None;
         private bool _fired;
         private bool _cancelled;
+
+        /// <summary>本轮自定义手势是由哪个虚拟键武装的（0 = 非自定义手势）。</summary>
+        private int _armedCustomVk;
 
         private bool _winSwallowed;
         private bool _winReplayed;
@@ -204,6 +222,72 @@ namespace RadialLauncher.Services
             }
 
             if (_armed != TriggerKind.Ctrl) return HookResult.None;
+            return HookResult.Of(FinishGesture());
+        }
+
+        // ============================ 键盘：Alt ============================
+
+        /// <summary>
+        /// Alt 的按下/松开。
+        /// 注：与 Ctrl 一样，Alt 也是只观察不拦截（单独按 Alt 本来就没有系统行为，且 Alt+F4、Alt+Tab 等组合键必须保持可用）。
+        /// </summary>
+        public HookResult AltEvent(bool isDown)
+        {
+            if (!ListenAlt)
+            {
+                // 监听关闭 ≠ Alt 从此不参与判定：在 v0.4 里 Alt 走的是“其他键”分支，
+                // 按住 Ctrl 期间按下 Alt（Ctrl+Alt+Del 的第一下）会取消本次唤出。
+                // 这里必须保留这个语义，否则关掉 Alt 监听反而让行为变松。
+                return isDown ? OtherKeyDown() : HookResult.None;
+            }
+
+            if (isDown)
+            {
+                if (_armed != TriggerKind.None) return HookResult.None;
+                return HookResult.Of(Arm(TriggerKind.Alt));
+            }
+
+            if (_armed != TriggerKind.Alt) return HookResult.None;
+            return HookResult.Of(FinishGesture());
+        }
+
+        // ============================ 键盘：自定义触发键 ============================
+
+        /// <summary>这个虚拟键是否被配置成自定义触发键。</summary>
+        public bool IsCustomTriggerKey(int vk)
+        {
+            var keys = CustomTriggerKeys;
+            for (int i = 0; i < keys.Length; i++)
+            {
+                if (keys[i] == vk) return true;
+            }
+            return false;
+        }
+
+        /// <summary>
+        /// 自定义触发键的按下/松开。
+        ///
+        /// <para>与 Ctrl / Alt 同为“纯监听”：按键照常传给系统，本状态机只负责计时与唤出。
+        /// 因此这里不需要任何补发逻辑，也不存在“吞掉了却没补回来”的残留状态。</para>
+        ///
+        /// <para>松开时要求**同一个**虚拟键：配置了多个自定义键时，松开另一个键不应该
+        /// 结束当前手势（否则先按 F13、再摸一下 Shift 就会把轮盘提前收掉）。</para>
+        /// </summary>
+        public HookResult CustomKeyEvent(int vk, bool isDown)
+        {
+            if (isDown)
+            {
+                // 已经被别的键武装时本键不参与 —— 与 Ctrl / Win / Alt / 中键完全一致：
+                // “第一个按下的触发键赢”，免得按住 Ctrl 时再摸到自定义键就把手势取消掉。
+                if (_armed != TriggerKind.None) return HookResult.None;
+
+                _armedCustomVk = vk;
+                return HookResult.Of(Arm(TriggerKind.Custom));
+            }
+
+            if (_armed != TriggerKind.Custom || _armedCustomVk != vk) return HookResult.None;
+
+            _armedCustomVk = 0;
             return HookResult.Of(FinishGesture());
         }
 
@@ -502,6 +586,7 @@ namespace RadialLauncher.Services
             _armed = TriggerKind.None;
             _fired = false;
             _cancelled = false;
+            _armedCustomVk = 0;
             _winSwallowed = false;
             _winReplayed = false;
             _midPassedThrough = false;
@@ -539,6 +624,8 @@ namespace RadialLauncher.Services
             _fired = false;
             _cancelled = false;
 
+            if (kind != TriggerKind.Custom) _armedCustomVk = 0;
+
             return HookEffect.StartHoldTimer;
         }
 
@@ -551,6 +638,7 @@ namespace RadialLauncher.Services
             _armed = TriggerKind.None;
             _fired = false;
             _cancelled = false;
+            _armedCustomVk = 0;
 
             // 手势只要结束，中键的两个标志就必须归位：调用方（MiddleButtonUp）会先读走
             // 它需要的那份值，这里清掉是为了防止任何残留标志渗进下一次手势。
@@ -572,6 +660,7 @@ namespace RadialLauncher.Services
             _armed = TriggerKind.None;
             _fired = false;
             _cancelled = false;
+            _armedCustomVk = 0;
 
             if (!wasFired) return effects;
 

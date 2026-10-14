@@ -31,7 +31,15 @@ namespace RadialLauncher.Models
 
         public bool ByCtrl { get; set; } = true;
         public bool ByWin { get; set; } = false;
+        public bool ByAlt { get; set; } = false;
         public bool ByMiddleMouse { get; set; } = false;
+
+        /// <summary>
+        /// 自定义触发键的按键名（如 "F13"、"CapsLock"、"Shift"）。
+        /// 与上面几个预设是并列关系：任意一个处于按下状态都可以唤出轮盘。
+        /// 名字到虚拟键码的解析见 <see cref="Services.CustomTriggerKeys"/>。
+        /// </summary>
+        public List<string> CustomTriggerKeys { get; set; } = new();
 
         /// <summary>需要按住多久（毫秒）才唤出轮盘。</summary>
         public int HoldThresholdMs { get; set; } = 220;

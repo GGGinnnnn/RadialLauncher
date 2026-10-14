@@ -11,15 +11,15 @@
 		<ApplicationManifest>app.manifest</ApplicationManifest>
 		<ApplicationIcon>Resources\app.ico</ApplicationIcon>
 
-		<!-- 版本：文件版本 0.4.0.0，关于页显示 v0.4 -->
-		<Version>0.4.0</Version>
-		<AssemblyVersion>0.4.0.0</AssemblyVersion>
-		<FileVersion>0.4.0.0</FileVersion>
-		<InformationalVersion>0.4</InformationalVersion>
+		<!-- 版本：文件版本 0.5.0.0，关于页显示 v0.5 -->
+		<Version>0.5.0</Version>
+		<AssemblyVersion>0.5.0.0</AssemblyVersion>
+		<FileVersion>0.5.0.0</FileVersion>
+		<InformationalVersion>0.5</InformationalVersion>
 
 		<AssemblyTitle>Radial Launcher</AssemblyTitle>
 		<Product>Radial Launcher</Product>
-		<Description>按住 Ctrl / Win / 鼠标中键唤出的轮盘启动器</Description>
+		<Description>按住 Ctrl / Win / Alt / 鼠标中键 / 自定义按键唤出的轮盘启动器</Description>
 		<Company>Radial Launcher</Company>
 		<Copyright>Copyright (C) 2026</Copyright>
 
