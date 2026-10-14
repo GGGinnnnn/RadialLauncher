@@ -271,6 +271,7 @@ namespace RadialLauncher.Services
             ["About_ClearLog"] = "清空日志",
             ["About_RefreshLog"] = "刷新",
             ["About_Description"] = "按住 Ctrl / Win / 鼠标中键，在鼠标处唤出轮盘启动器。",
+            ["About_License"] = "GNU GPL v2.0 · 自由软件，不含任何担保",
 
             // 托盘
             ["Tray_Tooltip"] = "轮盘启动器 — 右键打开菜单",
@@ -520,6 +521,7 @@ namespace RadialLauncher.Services
             ["About_ClearLog"] = "Clear log",
             ["About_RefreshLog"] = "Refresh",
             ["About_Description"] = "Hold Ctrl / Win / the middle mouse button to open a radial launcher at the cursor.",
+            ["About_License"] = "GNU GPL v2.0 · free software, no warranty",
 
             // Tray
             ["Tray_Tooltip"] = "Radial Launcher — right-click for the menu",

@@ -208,7 +208,7 @@ namespace RadialLauncher.Views
             else LoadProfileEditor();
         }
 
-        /// <summary>读取 InformationalVersion（csproj 里设成 0.1），显示为 v0.1。</summary>
+        /// <summary>读取 InformationalVersion（csproj 里设成 0.3），显示为 v0.3。</summary>
         private static string GetVersionText()
         {
             var assembly = typeof(App).Assembly;

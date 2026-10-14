@@ -958,6 +958,8 @@
                             <TextBlock x:Name="TxtVersion" Style="{StaticResource PageTitleText}"/>
                             <TextBlock Style="{StaticResource PageSubtitleText}"
                                        Text="{Binding [About_Description], Source={x:Static services:Loc.Instance}}"/>
+                            <TextBlock Style="{StaticResource PageSubtitleText}" Margin="0,2,0,0"
+                                       Text="{Binding [About_License], Source={x:Static services:Loc.Instance}}"/>
                         </StackPanel>
                     </StackPanel>
 
