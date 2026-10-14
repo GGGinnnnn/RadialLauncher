@@ -62,12 +62,12 @@ Windows 10 / 11（64 位）· .NET 8 · WPF · 免安装
 | 便携 7z | 约 46 MB | 不用 | 解压成文件夹，便于留档 / 带走 |
 | MSIX 安装包 | 约 64 MB | 不用 | 进开始菜单，可从「应用」里卸载 |
 
-**① 单文件版（推荐）** —— 下载 `RadialLauncher-v0.3.exe`，放到任意固定目录
+**① 单文件版（推荐）** —— 下载 `RadialLauncher-v0.4.exe`，放到任意固定目录
 （**不要**放临时目录），双击运行。程序不显示主窗口，只在托盘出现一个蓝色轮盘图标。
 首次启动会先自解压到 `%TEMP%\.net\`，慢一两秒，之后就正常了；在 exe 旁边放一个空的
 `portable.marker` 就能切成便携模式（见「数据目录」）。
 
-**② 单文件版 · 不含运行时** —— 下载 `RadialLauncher-v0.3-noruntime.exe`，用法同上，
+**② 单文件版 · 不含运行时** —— 下载 `RadialLauncher-v0.4-noruntime.exe`，用法同上，
 但**不带 .NET 运行时**，所以整包只有约 1.8 MB。
 
 动手前先确认目标机装没装 .NET 8 桌面运行时：
@@ -82,10 +82,10 @@ dotnet --list-runtimes | Select-String WindowsDesktop
 只会弹一个 "To run this application, you must install .NET Desktop Runtime" 的对话框 ——
 看到它就说明装错了包，换 ① 即可。
 
-**③ 便携 7z** —— 下载 `RadialLauncher-v0.3-portable.7z`，解压到任意固定位置，
+**③ 便携 7z** —— 下载 `RadialLauncher-v0.4-portable.7z`，解压到任意固定位置，
 双击里面的 `RadialLauncher.exe`。
 
-**④ MSIX 安装包** —— 下载 `RadialLauncher_0.3.0.0_x64.msix` 和配套的
+**④ MSIX 安装包** —— 下载 `RadialLauncher_0.4.0.0_x64.msix` 和配套的
 `RadialLauncher_Test.cer`，**先把 `.cer` 导入「本地计算机 → 受信任人」**
 （`LocalMachine\TrustedPeople`，导到「当前用户」不管用），再双击 `.msix` 安装。
 
