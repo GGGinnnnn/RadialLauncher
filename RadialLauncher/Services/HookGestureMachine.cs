@@ -163,6 +163,19 @@ namespace RadialLauncher.Services
         /// </summary>
         public bool CancelOnLeftClick { get; set; } = true;
 
+        /// <summary>
+        /// 宿主注入的“这个虚拟键此刻是否按着”查询：问的是键鼠的**真实状态**，与事件顺序无关。
+        ///
+        /// <para>**为什么需要它**：只看事件顺序判断“是不是组合键”有天然缺口 —— 另一个键可能是在
+        /// 触发键**之前**就按下的（先按住 Shift 再按 Ctrl），武装那一刻早就错过了它的 KeyDown，
+        /// <see cref="OtherKeyDown"/> 永远看不见它，于是阈值一到照样唤出轮盘。
+        /// 只有直接问一次真实按键状态，才能覆盖“先后顺序”这个维度。</para>
+        ///
+        /// <para>宿主注入 <see cref="KeyStateHelper.IsDown"/>（GetAsyncKeyState）。默认 null 表示
+        /// 不做物理核对 —— 本类型“纯逻辑、零 I/O”的契约因此得以保持，单测可以直接注入假探针。</para>
+        /// </summary>
+        public Func<int, bool>? IsVirtualKeyDown { get; set; }
+
         // ============================ 内部状态 ============================
 
         private TriggerKind _armed = TriggerKind.None;
@@ -211,13 +224,18 @@ namespace RadialLauncher.Services
         /// Ctrl 的按下/松开。
         /// 注：Ctrl 一直是放行的（不吞），触发与否只体现在唤出轮盘上。
         /// </summary>
-        public HookResult CtrlEvent(bool isDown)
+        public HookResult CtrlEvent(bool isDown, int vk = VkControl)
         {
             if (!ListenCtrl) return HookResult.None;
 
             if (isDown)
             {
-                if (_armed != TriggerKind.None) return HookResult.None;
+                // 已经武装着触发键，又按下了**另一个**触发键 —— 两个触发键同时按着，
+                // 不做“第一个赢”的静默忽略，而是作废本次手势（见 ComboCancel）。
+                // 同一个键的另一侧码（左/右 Ctrl）与重复按下仍按原样忽略。
+                if (_armed != TriggerKind.None)
+                    return IsArmedTriggerVk(vk) ? HookResult.None : ComboCancel(_armed);
+
                 return HookResult.Of(Arm(TriggerKind.Ctrl));
             }
 
@@ -231,7 +249,7 @@ namespace RadialLauncher.Services
         /// Alt 的按下/松开。
         /// 注：与 Ctrl 一样，Alt 也是只观察不拦截（单独按 Alt 本来就没有系统行为，且 Alt+F4、Alt+Tab 等组合键必须保持可用）。
         /// </summary>
-        public HookResult AltEvent(bool isDown)
+        public HookResult AltEvent(bool isDown, int vk = VkMenu)
         {
             if (!ListenAlt)
             {
@@ -243,7 +261,9 @@ namespace RadialLauncher.Services
 
             if (isDown)
             {
-                if (_armed != TriggerKind.None) return HookResult.None;
+                if (_armed != TriggerKind.None)
+                    return IsArmedTriggerVk(vk) ? HookResult.None : ComboCancel(_armed);
+
                 return HookResult.Of(Arm(TriggerKind.Alt));
             }
 
@@ -277,9 +297,10 @@ namespace RadialLauncher.Services
         {
             if (isDown)
             {
-                // 已经被别的键武装时本键不参与 —— 与 Ctrl / Win / Alt / 中键完全一致：
-                // “第一个按下的触发键赢”，免得按住 Ctrl 时再摸到自定义键就把手势取消掉。
-                if (_armed != TriggerKind.None) return HookResult.None;
+                // 已经被别的键武装时：同一个键自己（重复按下）忽略；
+                // 另一个键按着则判为组合操作并作废本次唤出（与 Ctrl / Win / Alt / 中键一致）。
+                if (_armed != TriggerKind.None)
+                    return IsArmedTriggerVk(vk) ? HookResult.None : ComboCancel(_armed);
 
                 _armedCustomVk = vk;
                 return HookResult.Of(Arm(TriggerKind.Custom));
@@ -300,11 +321,16 @@ namespace RadialLauncher.Services
         /// 监听关闭后按下不参与，但**已经吞过的那次按下**仍然必须收到它的松开
         /// （见 <see cref="WinUp"/> 的第一条分支），否则系统会以为 Win 一直按着。</para>
         /// </summary>
-        public HookResult WinEvent(bool isDown)
+        public HookResult WinEvent(bool isDown, int vk = VkLeftWin)
         {
             if (isDown)
             {
-                // 已经因为别的键武装了，Win 按下不参与；监听关闭时也不参与
+                // 已经因为别的键武装了：Win 是“另一个触发键”，本次手势作废（组合键语义）。
+                // 这条分支在 ListenWin 之前判断 —— 就算没监听 Win，Ctrl + Win 也是组合操作。
+                if (_armed != TriggerKind.None)
+                    return IsArmedTriggerVk(vk) ? HookResult.None : ComboCancel(_armed);
+
+                // 监听关闭时不参与
                 if (!ListenWin) return HookResult.None;
                 return WinDown();
             }
@@ -334,10 +360,20 @@ namespace RadialLauncher.Services
             {
                 if (!_winSwallowed) return HookResult.None;
 
-                // 拦截期间监听被关掉等异常路径：补一个 up
                 _winSwallowed = false;
-                var extra = _winReplayed ? HookEffect.None : HookEffect.ReplayWinUp;
-                return new HookResult(true, extra);
+
+                // Windows 已经收到过我们补发的 Win 按下（组合键路径，如 Ctrl+Win）——
+                // 这次**真实松开必须放行**。以前这里不分青红皂白地返回 Swallow=true，
+                // 于是系统收到了按下却等不到松开，以为 Win 一直按着（开始菜单卡住、
+                // 后续所有组合键都变成 Win+…）。这正是“补发了 down 就必须放行 up”的另一半。
+                if (_winReplayed)
+                {
+                    _winReplayed = false;
+                    return HookResult.Of(HookEffect.None);
+                }
+
+                // 我们吞了按下、却从没补发过（拦截期间监听被关掉等异常路径）：补一个 up
+                return new HookResult(true, HookEffect.ReplayWinUp);
             }
 
             bool fired = _fired;
@@ -394,14 +430,47 @@ namespace RadialLauncher.Services
                 effects |= HookEffect.StopHoldTimer;
             }
 
-            if (kind == TriggerKind.Win && _winSwallowed && !_winReplayed)
-            {
-                // Windows 还没收到过 Win 按下，先补一下，组合键才能生效
-                _winReplayed = true;
-                effects |= HookEffect.ReplayWinDown;
-            }
+            effects |= ReplaySwallowedWin(kind);
 
             return HookResult.Of(effects);
+        }
+
+        /// <summary>
+        /// 按住触发键期间又按下了**另一个键** → 判定为组合操作，作废本次唤出。
+        ///
+        /// <para>两条入口共用它：①别的键按下（<see cref="OtherKeyDown"/> 早期就看得见）；
+        /// ②**另一个触发键**按下 —— 后者以前是“第一个赢”的静默忽略，于是“先按住 Ctrl 再按住
+        /// Win”会留下一个仍然武装着的 Ctrl 手势。现在它同样是组合操作。</para>
+        /// </summary>
+        /// <param name="kind">武装中的触发键。调用方必须在本次调用**之前**读好它。</param>
+        private HookResult ComboCancel(TriggerKind kind)
+        {
+            // 轮盘已经显示：与“轮盘显示中按下别的键”完全同义 —— 取消，不执行任何功能。
+            // （与 OtherKeyDown 一致：这一条不受 CancelOnOtherKey 约束。）
+            if (_fired) return HookResult.Of(CancelGesture() | ReplaySwallowedWin(kind));
+
+            // 用户关掉了“按下其他键则取消”：退回旧的“静默忽略第二个键”语义。
+            // 组合键防误触是那个开关的职责，这里不能绕过它自作主张。
+            if (!CancelOnOtherKey) return HookResult.None;
+
+            _cancelled = true;
+
+            // 若之前吞过 Win 按下，现在必须让系统收到它，组合键才成立（Win+E、Ctrl+Win+…）。
+            return HookResult.Of(HookEffect.StopHoldTimer | ReplaySwallowedWin(kind));
+        }
+
+        /// <summary>
+        /// 把先前吞下的 Win 按下补回给系统（只补一次）。
+        ///
+        /// <para>收敛成一个出口的理由与 <see cref="WinUp"/> 相同：多一条路径各写一遍，
+        /// 迟早变成双份 KeyDown。</para>
+        /// </summary>
+        private HookEffect ReplaySwallowedWin(TriggerKind kind)
+        {
+            if (kind != TriggerKind.Win || !_winSwallowed || _winReplayed) return HookEffect.None;
+
+            _winReplayed = true;
+            return HookEffect.ReplayWinDown;
         }
 
         // ============================ 鼠标中键 ============================
@@ -418,13 +487,22 @@ namespace RadialLauncher.Services
 
             if (_armed != TriggerKind.None)
             {
-                // 上一次手势还没结束（例如接管时补发过松开、但用户又立刻按下中键）就被
-                // 别的键武装了。这里必须把中键的两个标志归位，否则这一次真实松开会被
-                // 上一次残留的 _midReleaseInjected 误判成“已经补发过”而吞掉，
-                // 导致系统以为中键一直按着（浏览器卡在中键滚动模式）。
+                // 情况一：武装中键的**就是它自己** —— 重复的按下（中间没有松开）只当噪声。
+                // ★ 必须**在任何标志归位之前**返回：把 _midPassedThrough 清成 false 会让
+                //   这次合法长按变成“从未接管”，松开时便不再补发中键松开 —— 正是
+                //   “浏览器卡在中键滚动模式”那个老坑。
+                if (_armed == TriggerKind.Middle) return HookResult.None;
+
+                // 情况二：上一次手势还没结束（例如接管时补发过松开、用户又立刻按下中键）
+                // 就被**别的键**武装了。这里必须把中键的两个标志归位，否则这一次真实松开会被
+                // 上一次残留的 _midReleaseInjected 误判成“已经补发过”而吞掉。
                 _midPassedThrough = false;
                 _midReleaseInjected = false;
-                return HookResult.None;
+
+                // 另一个触发键按着 → 组合操作，作废外面的手势。
+                // 注意这里**不补发中键松开**：这一次中键是自己按下的，原样放行给系统，
+                // 它的真实松开会走上面的“未接管”路径自然传递（人为补发会把长按变成早点击）。
+                return ComboCancel(_armed);
             }
 
             var fx = Arm(TriggerKind.Middle);
@@ -530,6 +608,19 @@ namespace RadialLauncher.Services
 
             if (_armed == TriggerKind.None || _fired || _cancelled) return effects;
 
+            // ★ 阈值到点，先做一次“真实按键状态”核对：只要此刻除了触发键自己还有别的键
+            //   （含鼠标键）按着，就认定用户在做组合操作，本次不唤出。
+            //
+            //   为什么必须问物理状态、而不能只看事件顺序：另一个键可能是在触发键**之前**
+            //   按下的，武装那一刻它的 KeyDown 早就过去了 —— 这正是“同时按住多个键仍会
+            //   唤出轮盘”的缺口所在。
+            if (CancelOnOtherKey && HasOtherKeyDown())
+            {
+                // 与“别的键按下”那条路径完全同义（含吞过 Win 时的补发），所以直接复用：
+                // _cancelled 会让随后回来的判定结果一并作废，松开时也只走“没唤出过”的分支。
+                return effects | ComboCancel(_armed).Effects;
+            }
+
             return effects | HookEffect.EvaluateTrigger;
         }
 
@@ -614,6 +705,105 @@ namespace RadialLauncher.Services
 
             return effects;
         }
+
+        // ============================ 内部：多键共存检查 ============================
+        //
+        // 决定“这次到底算不算组合操作”的只有一处时序信息：事件顺序（OtherKeyDown）。
+        // 它漏得掉“别的键先于触发键按下”这一类，所以阈值到点时要再问一次真实按键状态。
+        // 探测本身是宿主注入的 I/O（见 IsVirtualKeyDown），本类型只负责“扫哪些键、怎么判”。
+
+        /// <summary>扫描范围：虚拟键 1..254（0 无效、255 无意义）。鼠标键 1..6 也在其中。</summary>
+        private const int MinScanVk = 0x01;
+
+        /// <inheritdoc cref="MinScanVk"/>
+        private const int MaxScanVk = 0xFE;
+
+        // 与 NativeMethods 的同名常量一致。这里刻意不引用它：本类型的契约是
+        // “纯逻辑、零 Win32 依赖”，照抄几个常量比拉进整个 P/Invoke 表划算。
+        private const int VkMiddleButton = 0x04;
+        private const int VkShift = 0x10;
+        private const int VkControl = 0x11;
+        private const int VkMenu = 0x12;
+        private const int VkLeftWin = 0x5B;
+        private const int VkRightWin = 0x5C;
+        private const int VkLShift = 0xA0;
+        private const int VkRShift = 0xA1;
+        private const int VkLControl = 0xA2;
+        private const int VkRControl = 0xA3;
+        private const int VkLMenu = 0xA4;
+        private const int VkRMenu = 0xA5;
+
+        /// <summary>
+        /// 此刻除了“当前武装的触发键”之外，是否还有别的键（含鼠标键）按着。
+        ///
+        /// <para>与顺序无关：无论那个键是在触发键之前还是之后按下，只要核对这一刻它按着，
+        /// 就判为组合操作。这正是本方法相对于 <see cref="OtherKeyDown"/> 的全部价值。</para>
+        ///
+        /// <para>宿主没注入 <see cref="IsVirtualKeyDown"/> 时返回 false：退回“只看事件顺序”的
+        /// 老行为，单测里也是默认形态。</para>
+        /// </summary>
+        private bool HasOtherKeyDown()
+        {
+            var probe = IsVirtualKeyDown;
+            if (probe == null) return false;
+
+            for (int vk = MinScanVk; vk <= MaxScanVk; vk++)
+            {
+                if (IsArmedTriggerVk(vk)) continue;
+                if (probe(vk)) return true;
+            }
+
+            return false;
+        }
+
+        /// <summary>这个虚拟键是否就是“当前武装的触发键自己” —— 它按着是应该的，不算组合操作。</summary>
+        private bool IsArmedTriggerVk(int vk)
+        {
+            switch (_armed)
+            {
+                case TriggerKind.Ctrl:
+                    return SameKeyFamily(vk, VkControl);
+
+                case TriggerKind.Win:
+                    return vk == VkLeftWin || vk == VkRightWin;
+
+                case TriggerKind.Alt:
+                    return SameKeyFamily(vk, VkMenu);
+
+                case TriggerKind.Middle:
+                    return vk == VkMiddleButton;
+
+                case TriggerKind.Custom:
+                    // 自定义键可能是 Shift：泛码 0x10 与左右码 0xA0/0xA1 在 GetAsyncKeyState
+                    // 眼里是同一批键（按住左 Shift 时三者都为真）。若只排除用户实际按下的那一个，
+                    // 同一个键的另一侧码就会被判成“别的键”，于是 Shift 触发键永远唤不出轮盘。
+                    return SameKeyFamily(vk, _armedCustomVk);
+
+                default:
+                    return false;
+            }
+        }
+
+        /// <summary>
+        /// 两个虚拟键是否属于同一个“等价家族”。泛修饰键（Shift/Ctrl/Alt）与它左右侧的具体
+        /// 键码问的是同一个物理键，必须按家族比较，不能按数字比较。
+        /// </summary>
+        private static bool SameKeyFamily(int a, int b)
+        {
+            if (a == b) return true;
+
+            int family = KeyFamilyOf(a);
+            return family != 0 && family == KeyFamilyOf(b);
+        }
+
+        /// <summary>泛修饰键的家族 id；非修饰键返回 0，表示“各算各的”。</summary>
+        private static int KeyFamilyOf(int vk) => vk switch
+        {
+            VkShift or VkLShift or VkRShift => VkShift,      // 0x10 / 0xA0 / 0xA1
+            VkControl or VkLControl or VkRControl => VkControl, // 0x11 / 0xA2 / 0xA3
+            VkMenu or VkLMenu or VkRMenu => VkMenu,          // 0x12 / 0xA4 / 0xA5
+            _ => 0,
+        };
 
         // ============================ 内部：手势生命周期 ============================
 

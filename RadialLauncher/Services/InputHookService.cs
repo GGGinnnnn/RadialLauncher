@@ -163,7 +163,16 @@ namespace RadialLauncher.Services
         /// 手势状态机：所有“按住了什么、要不要吞、该补发什么”的判断都在它内部。
         /// 本类只负责安装钩子、把原始事件喂进去、施加它返回的副作用。
         /// </summary>
-        private readonly HookGestureMachine _machine = new();
+        private readonly HookGestureMachine _machine = new()
+        {
+            // ★ 让状态机能在阈值到点那一刻反问“除了触发键还有别的键按着吗”。
+            //   这是唯一覆盖“别的键先于触发键按下”的手段 —— 那种情况下武装时早就错过了
+            //   它的 KeyDown，只看事件顺序永远发现不了（先按住 Shift 再按 Ctrl 即典型）。
+            //
+            //   代价可控：全键程扫描实测约 0.8ms，且只在“按住到阈值”这一刻发生一次，
+            //   不在每次按键/鼠标移动的热路径上。
+            IsVirtualKeyDown = KeyStateHelper.IsDown,
+        };
 
         private Thread? _hookThread;
         private readonly ManualResetEventSlim _hookThreadReady = new(false);
@@ -714,12 +723,14 @@ namespace RadialLauncher.Services
                     case NativeMethods.VK_CONTROL:
                     case NativeMethods.VK_LCONTROL:
                     case NativeMethods.VK_RCONTROL:
-                        result = _machine.CtrlEvent(isDown);
+                        // 传真实 vk：状态机要靠它区分“同一个键的另一侧码”（忽略）
+                        // 与“另一个触发键”（组合操作 → 作废本次唤出）。
+                        result = _machine.CtrlEvent(isDown, vk);
                         break;
 
                     case NativeMethods.VK_LWIN:
                     case NativeMethods.VK_RWIN:
-                        result = _machine.WinEvent(isDown);
+                        result = _machine.WinEvent(isDown, vk);
                         break;
 
                     case NativeMethods.VK_ESCAPE:
@@ -729,7 +740,7 @@ namespace RadialLauncher.Services
                     case NativeMethods.VK_MENU:
                     case NativeMethods.VK_LMENU:
                     case NativeMethods.VK_RMENU:
-                        result = _machine.AltEvent(isDown);
+                        result = _machine.AltEvent(isDown, vk);
                         break;
 
                     default:

@@ -40,6 +40,16 @@ public class HookGestureMachineTests
             SuppressMiddle = suppressMiddle,
         };
 
+    /// <summary>
+    /// 装一个假的“真实按键状态”探针：只有列出的虚拟键算按着。
+    /// 状态机本身零 I/O，物理状态由宿主注入 —— 测试因此可以精确复现“同时按住多个键”。
+    /// </summary>
+    private static void HoldKeys(HookGestureMachine m, params int[] downVks)
+    {
+        var set = new HashSet<int>(downVks);
+        m.IsVirtualKeyDown = vk => set.Contains(vk);
+    }
+
     /// <summary>走完“按住 → 阈值到达 → 环境允许 → 轮盘已显示”这条最常用的路径。</summary>
     private static HookEffect ShowWheelByHolding(HookGestureMachine m, TriggerKind kind)
     {
@@ -83,16 +93,24 @@ public class HookGestureMachineTests
         Assert.False(m.IsArmed);
     }
 
+    /// <summary>
+    /// 已武装 Win 时按下 Ctrl：**另一个触发键**按下 ⇒ 组合操作，本次手势作废。
+    ///
+    /// <para>旧行为是“第一个按下的赢”静默忽略，于是“先按住 Win 再按住 Ctrl”会留下一个
+    /// 仍然武装着的 Win 手势 —— 阈值一到照样弹出轮盘（用户要的是 Ctrl+Win 组合）。
+    /// 现在它按组合键处理：取消计时，并补发被吞掉的 Win 按下。</para>
+    /// </summary>
     [Fact]
-    public void CtrlDown_WhileOtherTriggerArmed_IsIgnored()
+    public void CtrlDown_WhileWinArmed_VoidsTheGestureAsCombo()
     {
         var m = Machine(win: true);
         m.WinEvent(true);
 
         var r = m.CtrlEvent(true);
 
-        Assert.Equal(HookEffect.None, r.Effects);
-        Assert.Equal(TriggerKind.Win, m.ArmedKind);      // 仍然是 Win 在武装
+        Assert.True(Has(r.Effects, HookEffect.StopHoldTimer));
+        Assert.True(Has(r.Effects, HookEffect.ReplayWinDown));      // Win 组合键要能生效
+        Assert.False(Has(m.HoldElapsed(), HookEffect.EvaluateTrigger));
     }
 
     [Fact]
@@ -236,6 +254,27 @@ public class HookGestureMachineTests
         Assert.True(Has(r.Effects, HookEffect.HideWheel));
     }
 
+    /// <summary>
+    /// 轮盘显示期间按了别的键 → 取消并补发 Win 按下（组合键要生效）。此后用户松开 Win，
+    /// 这次**真实松开必须放行**：系统那边已经收到了我们补发的 Win 按下，再吞掉松开
+    /// 就会让系统以为 Win 一直按着（开始菜单/组合键全部卡住）。
+    /// </summary>
+    [Fact]
+    public void WinCombo_AfterReplayedDown_RealReleaseIsNotSwallowed()
+    {
+        var m = Machine(win: true);
+        m.WinEvent(true);                    // 吞下真实按下
+        m.HoldElapsed();
+        m.ResolveTrigger(true);              // 轮盘显示
+        m.OtherKeyDown();                    // 补发 Win down（组合键）
+
+        var up = m.WinEvent(false);
+
+        Assert.False(up.Swallow);                             // ← 不能吞
+        Assert.False(Has(up.Effects, HookEffect.ReplayWinTap));
+        Assert.Equal(HookEffect.None, m.ComputeAbortEffects());  // 收尾时也不该再有残留 Win
+    }
+
     [Fact]
     public void WinHeld_WithSuppress_SwallowsReleaseAndExecutes()
     {
@@ -341,16 +380,17 @@ public class HookGestureMachineTests
         Assert.Equal(HookEffect.None, r.Effects);
     }
 
+    /// <summary>同 Ctrl：第二个触发键按下 ⇒ 组合操作，作废本次唤出。</summary>
     [Fact]
-    public void AltDown_WhileOtherTriggerArmed_IsIgnored()
+    public void AltDown_WhileWinArmed_VoidsTheGestureAsCombo()
     {
         var m = Machine(alt: true, win: true);
         m.WinEvent(true);
 
         var r = m.AltEvent(true);
 
-        Assert.Equal(HookEffect.None, r.Effects);
-        Assert.Equal(TriggerKind.Win, m.ArmedKind);
+        Assert.True(Has(r.Effects, HookEffect.StopHoldTimer));
+        Assert.False(Has(m.HoldElapsed(), HookEffect.EvaluateTrigger));
     }
 
     [Fact]
@@ -413,15 +453,15 @@ public class HookGestureMachineTests
     }
 
     [Fact]
-    public void AltDown_WhileCustomKeyArmed_IsIgnored()
+    public void AltDown_WhileCustomKeyArmed_VoidsTheGestureAsCombo()
     {
         var m = Machine(alt: true, customKeys: [0x7C]);
         m.CustomKeyEvent(0x7C, true);
 
         var r = m.AltEvent(true);
 
-        Assert.Equal(HookEffect.None, r.Effects);
-        Assert.Equal(TriggerKind.Custom, m.ArmedKind);
+        Assert.True(Has(r.Effects, HookEffect.StopHoldTimer));
+        Assert.False(Has(m.HoldElapsed(), HookEffect.EvaluateTrigger));
     }
 
     // ==================== 自定义触发键 ====================
@@ -449,15 +489,15 @@ public class HookGestureMachineTests
     }
 
     [Fact]
-    public void CustomKeyDown_WhileOtherTriggerArmed_IsIgnored()
+    public void CustomKeyDown_WhileCtrlArmed_VoidsTheGestureAsCombo()
     {
         var m = Machine(customKeys: [0x7C]);
         m.CtrlEvent(true);
 
         var r = m.CustomKeyEvent(0x7C, true);
 
-        Assert.Equal(HookEffect.None, r.Effects);
-        Assert.Equal(TriggerKind.Ctrl, m.ArmedKind);
+        Assert.True(Has(r.Effects, HookEffect.StopHoldTimer));
+        Assert.False(Has(m.HoldElapsed(), HookEffect.EvaluateTrigger));
     }
 
     [Fact]
@@ -509,17 +549,17 @@ public class HookGestureMachineTests
     /// 已经有一个触发键在武装时，第二个自定义键按下不参与 —— 与 Ctrl / Win / Alt / 中键一致，
     /// 仍然是“第一个按下的赢”，而不是把当前手势取消掉。
     /// </summary>
+    /// <summary>两个自定义触发键同时按住 ⇒ 组合操作，作废本次唤出。</summary>
     [Fact]
-    public void CustomKeyDown_SecondKeyWhileArmed_IsIgnored()
+    public void CustomKeyDown_SecondKeyWhileArmed_VoidsTheGestureAsCombo()
     {
         var m = Machine(customKeys: [0x7C, 0x10]);
         m.CustomKeyEvent(0x7C, true);
 
         var r = m.CustomKeyEvent(0x10, true);
 
-        Assert.Equal(HookEffect.None, r.Effects);
-        Assert.Equal(TriggerKind.Custom, m.ArmedKind);
-        Assert.True(Has(m.HoldElapsed(), HookEffect.EvaluateTrigger));
+        Assert.True(Has(r.Effects, HookEffect.StopHoldTimer));
+        Assert.False(Has(m.HoldElapsed(), HookEffect.EvaluateTrigger));
     }
 
     /// <summary>被忽略的那次按下，它的松开也不能结束当前手势。</summary>
@@ -588,16 +628,23 @@ public class HookGestureMachineTests
         Assert.False(m.IsArmed);
     }
 
+    /// <summary>
+    /// 已武装 Win 时按下中键：作废 Win 手势（组合操作），本次不武装中键。
+    ///
+    /// <para>不补发中键松开：这一次中键是自己按下的、原样放行了，它的真实松开会自然传递；
+    /// 人为补一次会把“长按”变成“早点击”。</para>
+    /// </summary>
     [Fact]
-    public void MiddleDown_WhileOtherTriggerArmed_DoesNotArm()
+    public void MiddleDown_WhileWinArmed_VoidsTheGestureWithoutInjectingMiddleUp()
     {
         var m = Machine(middle: true, win: true);
         m.WinEvent(true);
 
         var r = m.MiddleButtonDown(P(10, 10));
 
-        Assert.Equal(HookEffect.None, r.Effects);
-        Assert.Equal(TriggerKind.Win, m.ArmedKind);
+        Assert.True(Has(r.Effects, HookEffect.StopHoldTimer));
+        Assert.False(Has(r.Effects, HookEffect.InjectMiddleUp));
+        Assert.False(Has(m.HoldElapsed(), HookEffect.EvaluateTrigger));
     }
 
     [Fact]
@@ -720,6 +767,149 @@ public class HookGestureMachineTests
         var effects = m.ResolveTrigger(true);
 
         Assert.True(Has(effects, HookEffect.InjectMiddleUp));
+    }
+
+    // ==================== 同时按住多个键（真实按键状态核对） ====================
+    //
+    // 只看事件顺序有天然缺口：另一个键可能是在触发键**之前**按下的，武装那一刻它的
+    // KeyDown 早就过去了。阈值到点时问一次真实按键状态，才能覆盖“先后顺序”这个维度。
+
+    /// <summary>同时按着 Ctrl 与 C：阈值到点不能唤出（Ctrl+C 是复制，不是唤出轮盘）。</summary>
+    [Fact]
+    public void HoldElapsed_WhenOtherKeyHeldSinceBeforeArming_DoesNotTrigger()
+    {
+        var m = Machine();
+        HoldKeys(m, 0x11, 0x43);          // Ctrl + C，两键都按着
+
+        m.CtrlEvent(true);                 // 武装（C 的 KeyDown 早就过去了，OtherKeyDown 看不见）
+
+        var effects = m.HoldElapsed();
+
+        Assert.False(Has(effects, HookEffect.EvaluateTrigger));
+        Assert.True(Has(effects, HookEffect.StopHoldTimer));
+    }
+
+    /// <summary>正常单击 Ctrl（没有别的键）仍然要唤出。</summary>
+    [Fact]
+    public void HoldElapsed_WhenOnlyTriggerKeyHeld_StillTriggers()
+    {
+        var m = Machine();
+        HoldKeys(m, 0x11);                 // 只有 Ctrl 自己
+
+        m.CtrlEvent(true);
+
+        Assert.True(Has(m.HoldElapsed(), HookEffect.EvaluateTrigger));
+    }
+
+    /// <summary>
+    /// 左 Ctrl 是**泛码 0x11 指向的那个键**，左右控制码在真实状态里同时为真。
+    /// 只排除用户实际按下的那一个，会把同一个键的另一侧码当成“别的键”，
+    /// 于是 Ctrl 触发键永远唤不出轮盘。
+    /// </summary>
+    [Fact]
+    public void HoldElapsed_WhenOnlyLeftCtrlHeld_IsNotMistakenForAnotherKey()
+    {
+        var m = Machine();
+        HoldKeys(m, 0x11, 0xA2);           // 按住左 Ctrl：泛码与 VK_LCONTROL 都按着
+
+        m.CtrlEvent(true, 0xA2);           // 钩子报告的是具体侧码
+
+        Assert.True(Has(m.HoldElapsed(), HookEffect.EvaluateTrigger));
+    }
+
+    /// <summary>自定义触发键是 Shift 时同理：0x10 / 0xA0 / 0xA1 是同一个物理键。</summary>
+    [Fact]
+    public void HoldElapsed_WhenCustomTriggerIsShift_IsNotMistakenForAnotherKey()
+    {
+        var m = Machine(customKeys: [0x10]);   // Shift
+        HoldKeys(m, 0x10, 0xA1);               // 按住右 Shift
+
+        m.CustomKeyEvent(0xA1, true);
+
+        Assert.True(Has(m.HoldElapsed(), HookEffect.EvaluateTrigger));
+    }
+
+    /// <summary>中键长按：中键自己按着不算“别的键”，否则中键永远唤不出轮盘。</summary>
+    [Fact]
+    public void HoldElapsed_WhenOnlyMiddleButtonHeld_StillTriggers()
+    {
+        var m = Machine(middle: true);
+        HoldKeys(m, 0x04);                 // VK_MBUTTON
+
+        m.MiddleButtonDown(P(0, 0));
+
+        Assert.True(Has(m.HoldElapsed(), HookEffect.EvaluateTrigger));
+    }
+
+    /// <summary>按住中键时鼠标左键也按着 → 组合操作，不唤出。</summary>
+    [Fact]
+    public void HoldElapsed_WhenMiddleAndLeftButtonHeld_DoesNotTrigger()
+    {
+        var m = Machine(middle: true);
+        HoldKeys(m, 0x04, 0x01);           // 中键 + 左键
+
+        m.MiddleButtonDown(P(0, 0));
+
+        Assert.False(Has(m.HoldElapsed(), HookEffect.EvaluateTrigger));
+    }
+
+    /// <summary>
+    /// 关掉“按下其他键则取消”即回到旧语义：只看事件顺序，物理核对不参与。
+    /// 组合键防误触是那个开关的职责，不能绕过它。
+    /// </summary>
+    [Fact]
+    public void HoldElapsed_WhenCancelDisabled_IgnoresHeldKeys()
+    {
+        var m = Machine();
+        m.CancelOnOtherKey = false;
+        HoldKeys(m, 0x11, 0x43);           // Ctrl + C 都按着
+
+        m.CtrlEvent(true);
+
+        Assert.True(Has(m.HoldElapsed(), HookEffect.EvaluateTrigger));
+    }
+
+    /// <summary>宿主没注入探针（单测默认形态）时退回旧行为，不做物理核对。</summary>
+    [Fact]
+    public void HoldElapsed_WithoutProbe_KeepsLegacyBehaviour()
+    {
+        var m = Machine();
+        m.CtrlEvent(true);
+
+        Assert.True(Has(m.HoldElapsed(), HookEffect.EvaluateTrigger));
+    }
+
+    /// <summary>
+    /// 阈值内已因别的键取消过，多键核对不应改变结论（仍不唤出，且不重复补发）。
+    /// </summary>
+    [Fact]
+    public void HoldElapsed_AfterOtherKeyCancelled_KeepsCancelled()
+    {
+        var m = Machine();
+        HoldKeys(m, 0x11, 0x43);
+        m.CtrlEvent(true);
+        m.OtherKeyDown();                  // 顺序路径先取消并停表
+
+        Assert.False(Has(m.HoldElapsed(), HookEffect.EvaluateTrigger));
+    }
+
+    /// <summary>
+    /// 武装中键期间又来一次中键按下（没有中间的松开）：不能破坏这次接管。
+    /// 若把 _midPassedThrough 清成 false，长按接管就不再补发中键松开，
+    /// 浏览器会卡在中键滚动模式 —— 这条断言钉住它。
+    /// </summary>
+    [Fact]
+    public void MiddleDown_RepeatedWhileArmed_KeepsTakeoverIntact()
+    {
+        var m = Machine(middle: true);
+        m.MiddleButtonDown(P(0, 0));
+        m.MiddleButtonDown(P(0, 0));      // 重复按下（噪声）
+
+        var effects = m.ResolveTrigger(true);
+
+        Assert.True(Has(effects, HookEffect.ShowWheel));
+        Assert.True(Has(effects, HookEffect.InjectMiddleUp));   // ← 仍必须补发
+        Assert.True(m.MiddleButtonUp().Swallow);
     }
 
     // ==================== Esc 与普通键 ====================

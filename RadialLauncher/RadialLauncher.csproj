@@ -11,11 +11,11 @@
 		<ApplicationManifest>app.manifest</ApplicationManifest>
 		<ApplicationIcon>Resources\app.ico</ApplicationIcon>
 
-		<!-- 版本：文件版本 0.5.0.0，关于页显示 v0.5 -->
-		<Version>0.5.0</Version>
-		<AssemblyVersion>0.5.0.0</AssemblyVersion>
-		<FileVersion>0.5.0.0</FileVersion>
-		<InformationalVersion>0.5</InformationalVersion>
+		<!-- 版本：文件版本 0.6.0.0，关于页显示 v0.6 -->
+		<Version>0.6.0</Version>
+		<AssemblyVersion>0.6.0.0</AssemblyVersion>
+		<FileVersion>0.6.0.0</FileVersion>
+		<InformationalVersion>0.6</InformationalVersion>
 
 		<AssemblyTitle>Radial Launcher</AssemblyTitle>
 		<Product>Radial Launcher</Product>
