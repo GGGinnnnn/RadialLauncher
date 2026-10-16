@@ -123,6 +123,28 @@ namespace RadialLauncher.Services
             ["System_StartupGroup"] = "启动与权限",
             ["System_SaveHint"] = "改动会在点“保存并关闭”后生效",
 
+            // 界面外观（深色模式 / 自定义背景 / 控件不透明度）
+            ["System_AppearanceGroup"] = "界面外观",
+            ["System_DarkMode"] = "深色模式",
+            ["System_DarkModeHint"] = "选中后立即换成深色主题，不需要重启。",
+            ["System_CustomBackground"] = "使用自定义背景图片（仅设置面板）",
+            ["System_BackgroundChoose"] = "选择图片…",
+            ["System_BackgroundClear"] = "清除",
+            ["System_BackgroundNone"] = "（尚未选择图片）",
+            ["System_BackgroundHint"] = "背景图只作用于设置面板，不影响轮盘与托盘。支持 png / jpg / bmp / gif / webp，会自动等比铺满。",
+            ["System_PanelOpacity"] = "控件不透明度",
+            ["System_PanelOpacityHint"] = "调低之后卡片和输入框会变透明，露出后面的背景图。",
+            ["System_BackgroundMissing"] = "图片不存在或无法读取：{0}",
+
+            // 测试模式
+            ["System_TestMode"] = "测试模式（开发与上报错误时使用）",
+            ["System_TestModeEnable"] = "启用测试模式（详细日志）",
+            ["System_TestModeHint"] = "打开后每次启动都会在数据目录里另存一份详细日志：Debug 级、从启动第一行开始记，错误与警告分别标成 [ERROR] / [WARN ]。文件名包含日期、时间、启动参数以及是否以管理员运行。遇到问题把这个文件发出来即可。",
+            ["System_OpenSessionLog"] = "打开本次详细日志",
+            ["System_SessionLogActive"] = "本次运行的详细日志：{0}",
+            ["System_SessionLogInactive"] = "本次运行未开启测试模式（打开开关并保存后，从下次启动开始记录）。",
+            ["System_TestArgumentHint"] = "也可以在命令行加 --test 直接开启测试模式，用来抓“设置面板还没打开就出问题”的现场。",
+
             // 总览
             ["General_Status"] = "运行状态",
             ["General_EnableWheel"] = "启用轮盘（关闭后不再拦截任何按键）",
@@ -383,6 +405,28 @@ namespace RadialLauncher.Services
             ["System_FontFallback"] = "{0} is not installed, fell back to {1}",
             ["System_StartupGroup"] = "Startup and privileges",
             ["System_SaveHint"] = "Changes take effect when you press Save & Close",
+
+            // Appearance (dark mode / custom background / control opacity)
+            ["System_AppearanceGroup"] = "Appearance",
+            ["System_DarkMode"] = "Dark mode",
+            ["System_DarkModeHint"] = "Switches to the dark theme immediately, no restart needed.",
+            ["System_CustomBackground"] = "Use a custom background image (settings panel only)",
+            ["System_BackgroundChoose"] = "Choose image…",
+            ["System_BackgroundClear"] = "Clear",
+            ["System_BackgroundNone"] = "(no image selected)",
+            ["System_BackgroundHint"] = "The background only affects the settings panel, not the wheel or the tray. PNG / JPG / BMP / GIF / WEBP are supported and scaled to fill.",
+            ["System_PanelOpacity"] = "Control opacity",
+            ["System_PanelOpacityHint"] = "Lower it to make cards and inputs translucent so the background shows through.",
+            ["System_BackgroundMissing"] = "Image is missing or unreadable: {0}",
+
+            // Test mode
+            ["System_TestMode"] = "Test mode (for development and bug reports)",
+            ["System_TestModeEnable"] = "Enable test mode (detailed log)",
+            ["System_TestModeHint"] = "When on, every launch writes an extra detailed log into the data folder: Debug level, from the very first line, with errors and warnings tagged as [ERROR] / [WARN ]. The file name contains date, time, command-line arguments and whether it ran elevated. Attach that file when reporting a problem.",
+            ["System_OpenSessionLog"] = "Open this run's detailed log",
+            ["System_SessionLogActive"] = "Detailed log for this run: {0}",
+            ["System_SessionLogInactive"] = "Test mode is off for this run (turn the switch on and save; logging starts from the next launch).",
+            ["System_TestArgumentHint"] = "You can also pass --test on the command line to enable test mode directly — useful for capturing problems that happen before the settings panel is open.",
 
             // Overview
             ["General_Status"] = "Status",

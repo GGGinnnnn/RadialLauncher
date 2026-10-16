@@ -41,6 +41,9 @@ namespace RadialLauncher
         /// <summary>让已在运行的实例优雅退出。</summary>
         public const string QuitArgument = "--quit";
 
+        /// <summary>直接开启测试模式（详细日志），用于开发与让用户上报错误。</summary>
+        public const string TestArgument = "--test";
+
         protected override void OnStartup(StartupEventArgs e)
         {
             base.OnStartup(e);
@@ -50,6 +53,18 @@ namespace RadialLauncher
 
             bool forceStart = Array.Exists(e.Args,
                 a => string.Equals(a, ForceArgument, StringComparison.OrdinalIgnoreCase));
+
+            // ---- 测试模式（启动参数）：必须放在最前面 ----
+            // 详细日志要“从启动程序起”记录，所以这里连互斥体都还没碰就先开日志，
+            // 免得漏掉启动早期（单实例判定、提权）那几行。
+            bool testByArgument = Array.Exists(e.Args,
+                a => string.Equals(a, TestArgument, StringComparison.OrdinalIgnoreCase));
+
+            if (testByArgument)
+            {
+                Logger.StartSessionLog(e.Args, ElevationService.IsElevated);
+                Logger.Info("检测到 --test 启动参数，测试模式已开启");
+            }
 
             // ---- RadialLauncher.exe --quit：让已运行的实例优雅退出 ----
             if (Array.Exists(e.Args, a => string.Equals(a, QuitArgument, StringComparison.OrdinalIgnoreCase)))
@@ -110,6 +125,14 @@ namespace RadialLauncher
             configService.Load();
             Loc.Instance.SetLanguage(configService.Config.System.Language);
             ThemeManager.ApplyUiFont(configService.Config.System.UiFont);
+
+            // ---- 深色模式 ----
+            ThemeManager.ApplyTheme(configService.Config.System.DarkMode);
+
+            // ---- 测试模式（设置里的开关）----
+            // 已经由 --test 开过的话，StartSessionLog 会直接返回，不会重复建文件。
+            if (configService.Config.System.TestMode)
+                Logger.StartSessionLog(e.Args, ElevationService.IsElevated);
 
             // ---- 诊断模式：RadialLauncher.exe --selftest ----
             // 逐个加载全部窗口，验证 XAML、静态资源与快捷键目录在运行时都是好的。
@@ -580,6 +603,9 @@ namespace RadialLauncher
             }
 
             Logger.Info("================ Radial Launcher 退出 ================");
+
+            // 测试模式：补一段警告/错误统计，方便直接贴进 issue
+            Logger.EndSessionLog();
 
             _instanceMutex?.Dispose();
             _instanceMutex = null;

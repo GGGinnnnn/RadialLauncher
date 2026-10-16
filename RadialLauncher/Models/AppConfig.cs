@@ -125,6 +125,33 @@ namespace RadialLauncher.Models
         public bool ShowTrayTip { get; set; } = false;
 
         public string GitHubUrl { get; set; } = "https://github.com/GGGinnnnn/RadialLauncher";
+
+        // ===== 界面主题（设置面板自己的外观，与轮盘配色无关）=====
+
+        /// <summary>深色模式。</summary>
+        public bool DarkMode { get; set; } = false;
+
+        /// <summary>是否给设置面板挂一张自定义背景图。</summary>
+        public bool CustomBackgroundEnabled { get; set; } = false;
+
+        /// <summary>自定义背景图片路径（用户自己电脑上的图片，支持 png / jpg / bmp / gif / webp）。</summary>
+        public string CustomBackgroundPath { get; set; } = "";
+
+        /// <summary>
+        /// 设置面板控件的不透明度（0.25 ~ 1.0）。
+        /// 调低之后卡片、输入框会半透明，透出后面的自定义背景。
+        /// </summary>
+        public double PanelOpacity { get; set; } = 1.0;
+
+        // ===== 诊断 =====
+
+        /// <summary>
+        /// 测试模式（开发与上报错误时使用）。
+        /// 打开后每次启动都会在数据目录另存一份详细日志，
+        /// 文件名形如 RadialLauncher_2026-10-16_143022_--settings_admin.log，
+        /// 记录级别自动降到 Debug，从启动第一行开始记。
+        /// </summary>
+        public bool TestMode { get; set; } = false;
     }
 
     /// <summary>一个轮盘选项。</summary>

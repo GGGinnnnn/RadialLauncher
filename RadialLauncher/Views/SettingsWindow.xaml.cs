@@ -2,6 +2,7 @@ using System;
 using System.Collections.Generic;
 using System.Collections.ObjectModel;
 using System.Diagnostics;
+using System.IO;
 using System.Linq;
 using System.Reflection;
 using System.Windows;
@@ -9,6 +10,7 @@ using System.Windows.Controls;
 using System.Windows.Input;
 using System.Windows.Media;
 using System.Windows.Media.Animation;
+using System.Windows.Media.Imaging;
 using System.Windows.Threading;
 using Microsoft.Win32;
 using RadialLauncher.Models;
@@ -200,6 +202,12 @@ namespace RadialLauncher.Views
                 TxtHeaderVersion.Text = GetVersionText();
                 SelectFontItem(c.System.UiFont);
                 UpdateDataDirNote();
+
+                // 界面外观 + 测试模式
+                CbDarkMode.IsChecked = c.System.DarkMode;
+                CbCustomBackground.IsChecked = c.System.CustomBackgroundEnabled;
+                SldPanelOpacity.Value = Math.Clamp(c.System.PanelOpacity, 0.25, 1.0);
+                CbTestMode.IsChecked = c.System.TestMode;
             }
             finally
             {
@@ -209,6 +217,9 @@ namespace RadialLauncher.Views
             UpdateAdminNote();
             UpdateColorSwatches();
             UpdateAppearancePreview();
+            UpdatePanelOpacityLabel();
+            ApplyBackgroundAndOpacity();
+            UpdateSessionLogNote();
             RefreshWindowList();
             BuildTargetCombo();
             UpdateStatus();
@@ -898,6 +909,199 @@ namespace RadialLauncher.Views
             BuildFontCombo();
             ToastWindow.Show(Loc.T("System_FontReload"),
                 Loc.Pick("已重新扫描系统字体。", "System fonts rescanned."));
+        }
+
+        // ==================== 界面外观：深色模式 / 自定义背景 / 控件不透明度 ====================
+
+        private void OnDarkModeChanged(object sender, RoutedEventArgs e)
+        {
+            if (!_controlsReady) return;   // InitializeComponent 期间会被触发一次
+
+            bool dark = CbDarkMode.IsChecked == true;
+            _working.System.DarkMode = dark;
+
+            // 立即换肤：整份替换调色板，面板里所有 DynamicResource 会跟着重新解析
+            ThemeManager.ApplyTheme(dark);
+
+            // 背景图是挂在窗口上的，换主题后要确认它还在（浅色/深色都会用到）
+            ApplyBackgroundAndOpacity();
+        }
+
+        private void OnBackgroundFlagChanged(object sender, RoutedEventArgs e)
+        {
+            if (!_controlsReady) return;
+
+            _working.System.CustomBackgroundEnabled = CbCustomBackground.IsChecked == true;
+            ApplyBackgroundAndOpacity();
+        }
+
+        private void OnPanelOpacityChanged(object sender, RoutedEventArgs e)
+        {
+            // 这个事件在 InitializeComponent 早期就会来（Slider 的 Min/Max 强制转换），
+            // 那时 TxtPanelOpacityValue 还是 null。
+            if (TxtPanelOpacityValue == null) return;
+
+            UpdatePanelOpacityLabel();
+
+            if (!CanHandleEvents) return;
+
+            _working.System.PanelOpacity = SldPanelOpacity.Value;
+            ApplyBackgroundAndOpacity();
+        }
+
+        private void UpdatePanelOpacityLabel()
+        {
+            if (TxtPanelOpacityValue != null)
+                TxtPanelOpacityValue.Text = (SldPanelOpacity.Value * 100).ToString("0") + "%";
+        }
+
+        private void OnChooseBackground(object sender, RoutedEventArgs e)
+        {
+            var dialog = new OpenFileDialog
+            {
+                Title = Loc.T("System_CustomBackground"),
+                Filter = Loc.Pick(
+                    "图片|*.png;*.jpg;*.jpeg;*.bmp;*.gif;*.webp|所有文件|*.*",
+                    "Images|*.png;*.jpg;*.jpeg;*.bmp;*.gif;*.webp|All files|*.*"),
+                CheckFileExists = true,
+            };
+
+            if (dialog.ShowDialog(this) != true) return;
+
+            _working.System.CustomBackgroundPath = dialog.FileName;
+            _working.System.CustomBackgroundEnabled = true;
+
+            // 走事件会再调一次 ApplyBackgroundAndOpacity，这里直接设值就行
+            CbCustomBackground.IsChecked = true;
+            ApplyBackgroundAndOpacity();
+        }
+
+        private void OnClearBackground(object sender, RoutedEventArgs e)
+        {
+            _working.System.CustomBackgroundPath = "";
+            _working.System.CustomBackgroundEnabled = false;
+            CbCustomBackground.IsChecked = false;
+            ApplyBackgroundAndOpacity();
+        }
+
+        /// <summary>
+        /// 把「自定义背景 + 控件不透明度」落到窗口上。
+        ///
+        /// <para>背景挂在 Window.Background 上，控件不透明度加在根容器 RootLayout 上 ——
+        /// 这样调低不透明度时卡片会变透明、露出后面的图，而窗口边框不会一起变淡。</para>
+        /// </summary>
+        private void ApplyBackgroundAndOpacity()
+        {
+            var system = _working.System;
+            var path = system.CustomBackgroundPath ?? "";
+
+            if (system.CustomBackgroundEnabled && path.Length > 0 && File.Exists(path))
+            {
+                try
+                {
+                    var image = new BitmapImage();
+                    image.BeginInit();
+                    image.CacheOption = BitmapCacheOption.OnLoad;   // 载入后立刻放手，不锁用户的原图
+                    image.UriSource = new Uri(path, UriKind.Absolute);
+                    image.EndInit();
+                    image.Freeze();
+
+                    Background = new ImageBrush(image)
+                    {
+                        Stretch = Stretch.UniformToFill,
+                        AlignmentX = AlignmentX.Center,
+                        AlignmentY = AlignmentY.Center,
+                    };
+                }
+                catch (Exception ex)
+                {
+                    Logger.Warn("自定义背景加载失败：" + ex.Message);
+                    SetResourceReference(BackgroundProperty, "WindowBackgroundBrush");
+                }
+            }
+            else
+            {
+                // 回到主题色 —— 用 SetResourceReference 而不是赋具体画刷，
+                // 这样之后切深色/浅色它还会跟着变。
+                SetResourceReference(BackgroundProperty, "WindowBackgroundBrush");
+            }
+
+            ThemeManager.ApplyPanelOpacity(RootLayout, system.PanelOpacity);
+            UpdateBackgroundPreview();
+        }
+
+        private void UpdateBackgroundPreview()
+        {
+            if (TxtBackgroundPath == null || ImgBackgroundPreview == null) return;
+
+            var path = _working.System.CustomBackgroundPath ?? "";
+
+            if (path.Length == 0)
+            {
+                ImgBackgroundPreview.Source = null;
+                TxtBackgroundPath.Text = Loc.T("System_BackgroundNone");
+                return;
+            }
+
+            if (!File.Exists(path))
+            {
+                ImgBackgroundPreview.Source = null;
+                TxtBackgroundPath.Text = string.Format(Loc.T("System_BackgroundMissing"), path);
+                return;
+            }
+
+            TxtBackgroundPath.Text = path;
+
+            try
+            {
+                var image = new BitmapImage();
+                image.BeginInit();
+                image.CacheOption = BitmapCacheOption.OnLoad;
+                image.DecodePixelWidth = 240;   // 只是一张小预览，别把原图整个解码进内存
+                image.UriSource = new Uri(path, UriKind.Absolute);
+                image.EndInit();
+                image.Freeze();
+                ImgBackgroundPreview.Source = image;
+            }
+            catch (Exception ex)
+            {
+                ImgBackgroundPreview.Source = null;
+                Logger.Warn("背景预览失败：" + ex.Message);
+            }
+        }
+
+        // ==================== 测试模式 ====================
+
+        private void UpdateSessionLogNote()
+        {
+            if (TxtSessionLog == null) return;
+
+            var path = Logger.SessionLogPath;
+            TxtSessionLog.Text = string.IsNullOrEmpty(path)
+                ? Loc.T("System_SessionLogInactive")
+                : string.Format(Loc.T("System_SessionLogActive"), path);
+        }
+
+        private void OnOpenSessionLog(object sender, RoutedEventArgs e)
+        {
+            var path = Logger.SessionLogPath;
+
+            if (string.IsNullOrEmpty(path) || !File.Exists(path))
+            {
+                ToastWindow.Show(Loc.T("System_OpenSessionLog"), Loc.T("System_SessionLogInactive"));
+                return;
+            }
+
+            try
+            {
+                Logger.Flush();   // 先把队列里剩下的写下去，免得打开看到的是半截
+                Process.Start(new ProcessStartInfo(path) { UseShellExecute = true });
+            }
+            catch (Exception ex)
+            {
+                Logger.Warn("打开详细日志失败：" + ex.Message);
+                ToastWindow.Show(Loc.T("System_OpenSessionLog"), ex.Message, error: true);
+            }
         }
 
         // ==================== 侧边栏 ====================
@@ -1595,6 +1799,11 @@ namespace RadialLauncher.Views
             c.System.RunAsAdmin = CbSystemRunAsAdmin.IsChecked == true;
             c.System.ShowTrayTip = CbShowTrayTip.IsChecked == true;
             c.System.GitHubUrl = TxtGitHub.Text?.Trim() ?? "";
+
+            c.System.DarkMode = CbDarkMode.IsChecked == true;
+            c.System.CustomBackgroundEnabled = CbCustomBackground.IsChecked == true;
+            c.System.PanelOpacity = SldPanelOpacity.Value;   // 路径由选图事件直接写进 _working
+            c.System.TestMode = CbTestMode.IsChecked == true;
 
             if (CmbUiFont.SelectedItem is ComboBoxItem { Tag: string font })
                 c.System.UiFont = font;

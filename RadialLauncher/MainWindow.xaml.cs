@@ -1,5 +1,6 @@
 using System;
 using System.Diagnostics;
+using System.Threading;
 using System.Windows;
 using System.Windows.Interop;
 using System.Windows.Threading;
@@ -75,12 +76,48 @@ namespace RadialLauncher
 
         private void OnLoaded(object sender, RoutedEventArgs e)
         {
+            var watch = Stopwatch.StartNew();
+
             // 托盘图标所在的视觉树已经加载完成，可以安心隐藏窗口了
             Hide();
-            Logger.Info("主窗口已隐藏，托盘图标就绪");
+            Logger.Info("主窗口已隐藏");
 
-            InitializeTrayIcon();
-            InitializeServices();
+            // ---- 顺序很关键：先起服务（钩子 + 前台检测），再管托盘图标 ----
+            //
+            // 开机登录那一刻资源管理器往往还没把通知区准备好，创建托盘图标有可能失败，
+            // 甚至卡在等 shell 回应上。旧顺序是「先托盘、后服务」，一旦卡在托盘那一步，
+            // 后面的钩子就永远不会安装 —— 表现恰好就是用户报的那一串症状：
+            // 没有托盘图标、按键全部没反应、只能去任务管理器结束进程再重开。
+            // 现在两步各自兜底，任何一步出问题都不会拖死另一步。
+            bool servicesOk = true;
+            try
+            {
+                InitializeServices();
+            }
+            catch (Exception ex)
+            {
+                servicesOk = false;
+                Logger.Error("启动服务失败", ex);
+            }
+
+            var servicesMs = watch.ElapsedMilliseconds;
+
+            try
+            {
+                InitializeTrayIcon();
+            }
+            catch (Exception ex)
+            {
+                Logger.Error("初始化托盘图标失败", ex);
+            }
+
+            Logger.Info($"启动耗时：服务 {servicesMs} ms，托盘 {watch.ElapsedMilliseconds - servicesMs} ms");
+
+            // 托盘看门狗：这次没成，或者成了但当时 shell 还没准备好，都由它兜住
+            StartTrayWatchdog(servicesOk);
+
+            // UI 线程看门狗：万一界面线程卡死，主动退出释放单实例锁
+            StartUiWatchdog();
 
             if (_configService.Config.System.ShowTrayTip)
             {
@@ -89,6 +126,186 @@ namespace RadialLauncher
                     Loc.Pick("按住触发键即可在鼠标处唤出轮盘。", "Hold a trigger key to open the wheel at the cursor."));
             }
         }
+
+        // ==================== 托盘看门狗 ====================
+
+        private DispatcherTimer? _trayWatchdog;
+        private int _trayAttempts;
+
+        /// <summary>创建失败时多久重试一次。</summary>
+        private static readonly TimeSpan TrayRetryInterval = TimeSpan.FromMilliseconds(1500);
+
+        /// <summary>最多重试几次（约 22 秒），之后放弃但不再影响其它功能。</summary>
+        private const int TrayRetryMaxAttempts = 15;
+
+        /// <summary>
+        /// 启动后再盯一会儿托盘图标。
+        ///
+        /// <para>两件事：① 创建失败就重试，登录瞬间 shell 没就绪是很常见的失败原因；
+        /// ② 创建成功也主动重挂一次 —— 有些情况下 Shell_NotifyIcon 会“成功但图标不出现”
+        /// （通知区尚未初始化完），重挂一次就正常了。</para>
+        ///
+        /// <para>重挂用的是「置空再赋值」：IconSource 是依赖属性，赋同一个值不会触发变更，
+        /// 必须让它先变一次。H.NotifyIcon 内部自己处理 TaskbarCreated（资源管理器重启后
+        /// 自动重新添加图标），所以这里不需要额外监听 shell 广播。</para>
+        /// </summary>
+        private void StartTrayWatchdog(bool servicesOk)
+        {
+            if (_trayWatchdog != null) return;
+
+            int refreshesLeft = Tray.IconSource != null ? 2 : 0;
+
+            _trayWatchdog = new DispatcherTimer(DispatcherPriority.Background)
+            {
+                Interval = TrayRetryInterval,
+            };
+
+            _trayWatchdog.Tick += (_, _) =>
+            {
+                _trayAttempts++;
+
+                if (Tray.IconSource == null)
+                {
+                    if (_trayAttempts > TrayRetryMaxAttempts)
+                    {
+                        Logger.Warn($"托盘图标重试 {_trayAttempts - 1} 次仍未成功，放弃。" +
+                                    $"核心功能{(servicesOk ? "已" : "未")}启动，界面仍可用托盘菜单以外的方式打开。");
+                        StopTrayWatchdog();
+                        return;
+                    }
+
+                    Logger.Info($"托盘图标第 {_trayAttempts} 次重试");
+                    try { InitializeTrayIcon(); }
+                    catch (Exception ex) { Logger.Error("重试托盘图标失败", ex); }
+
+                    return;
+                }
+
+                // 已经挂上了，再做一两次主动重挂，覆盖“成功但没显示”的情况
+                if (refreshesLeft > 0)
+                {
+                    refreshesLeft--;
+                    RefreshTrayIcon();
+                }
+                else
+                {
+                    StopTrayWatchdog();
+                }
+            };
+
+            _trayWatchdog.Start();
+        }
+
+        /// <summary>把已挂上的托盘图标重挂一次（置空再赋值，强制走一遍 Shell_NotifyIcon）。</summary>
+        private void RefreshTrayIcon()
+        {
+            try
+            {
+                var icon = Tray.IconSource;
+                if (icon == null) return;
+
+                Tray.IconSource = null;
+                Tray.IconSource = icon;
+
+                Logger.Debug("托盘图标已重挂一次");
+            }
+            catch (Exception ex)
+            {
+                Logger.Warn("重挂托盘图标失败：" + ex.Message);
+            }
+        }
+
+        private void StopTrayWatchdog()
+        {
+            _trayWatchdog?.Stop();
+            _trayWatchdog = null;
+        }
+
+        // ==================== UI 线程看门狗 ====================
+
+        private Thread? _uiWatchdog;
+        private volatile bool _uiWatchdogStop;
+        private long _uiHeartbeat;
+        private int _uiStuckCount;
+
+        /// <summary>心跳间隔。</summary>
+        private const int UiWatchdogIntervalMs = 5000;
+
+        /// <summary>连续多少次收不到心跳就判定 UI 线程卡死（5s × 6 ≈ 30s）。</summary>
+        private const int UiWatchdogMaxStuck = 6;
+
+        /// <summary>
+        /// UI 线程看门狗。
+        ///
+        /// <para>用户报过一种很难受的状态：程序“假活”——进程还在、托盘图标没了、功能全废，
+        /// 而它还占着单实例互斥体，于是重新双击 exe 也进不来，只能去任务管理器结束进程。
+        /// 那是 UI 线程卡死、而后台线程（激活监听）还活着造成的。</para>
+        ///
+        /// <para>这里给 UI 线程加个心跳：后台线程定时往 Dispatcher 投一次 ping。
+        /// 连续 6 次（约 30 秒）投不进去，说明 UI 线程已经彻底不干活了，
+        /// 那就记一条 ERROR 并主动退出 —— 进程一退，互斥体立刻释放，
+        /// 用户下次双击就能正常启动，不必再开任务管理器。</para>
+        ///
+        /// <para>30 秒这个阈值是安全的：模态对话框、菜单弹层都会继续泵消息，
+        /// 心跳照样能进；真能在 UI 线程上卡住 30 秒的，本来就是必须处理的故障。</para>
+        /// </summary>
+        private void StartUiWatchdog()
+        {
+            if (_uiWatchdog != null) return;
+
+            _uiWatchdog = new Thread(() =>
+            {
+                while (!_uiWatchdogStop)
+                {
+                    long before = Interlocked.Read(ref _uiHeartbeat);
+
+                    try
+                    {
+                        Dispatcher.BeginInvoke(new Action(() => Interlocked.Increment(ref _uiHeartbeat)),
+                            DispatcherPriority.Normal);
+                    }
+                    catch
+                    {
+                        // Dispatcher 已经关了，正常退出
+                        return;
+                    }
+
+                    Thread.Sleep(UiWatchdogIntervalMs);
+                    if (_uiWatchdogStop) return;
+
+                    if (Interlocked.Read(ref _uiHeartbeat) != before)
+                    {
+                        _uiStuckCount = 0;
+                        continue;
+                    }
+
+                    _uiStuckCount++;
+                    Logger.Warn($"界面线程已连续 {_uiStuckCount} 次（约 {_uiStuckCount * UiWatchdogIntervalMs / 1000} 秒）无响应");
+
+                    if (_uiStuckCount < UiWatchdogMaxStuck) continue;
+
+                    Logger.Error(
+                        $"界面线程连续 {UiWatchdogMaxStuck} 次心跳无响应，判定为卡死。" +
+                        "主动退出以释放单实例锁，避免变成必须手动结束的僵尸进程。");
+
+                    try { Logger.EndSessionLog(); } catch { }
+                    try { Logger.Flush(2000); } catch { }
+
+                    // UI 线程已经不可用，走不了正常关闭流程，只能硬退
+                    Environment.Exit(0);
+                    return;
+                }
+            })
+            {
+                IsBackground = true,
+                Name = "RadialLauncher.UiWatchdog",
+            };
+
+            _uiWatchdog.Start();
+            Logger.Debug("界面线程看门狗已启动");
+        }
+
+        private void StopUiWatchdog() => _uiWatchdogStop = true;
 
         /// <summary>
         /// 托盘图标必须在视觉树加载之后、且用位图格式设置，
@@ -148,6 +365,8 @@ namespace RadialLauncher
             {
                 _testTimer?.Stop();
                 _releaseTimer?.Stop();
+                StopTrayWatchdog();
+                StopUiWatchdog();
                 _pendingItem = null;
 
                 // 退出前记下钩子回调的最长耗时，便于判断有没有出现阻塞
@@ -196,6 +415,7 @@ namespace RadialLauncher
 
             Loc.Instance.SetLanguage(config.System.Language);
             ThemeManager.ApplyUiFont(config.System.UiFont);
+            ThemeManager.ApplyTheme(config.System.DarkMode);
             SyncHookSettings();
 
             if (config.Trigger.Enabled)

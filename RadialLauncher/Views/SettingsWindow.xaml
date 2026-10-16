@@ -8,7 +8,7 @@
         MinWidth="980" MinHeight="640"
         WindowStartupLocation="CenterScreen"
         FontFamily="{DynamicResource AppFontFamily}"
-        Background="{StaticResource WindowBackgroundBrush}">
+        Background="{DynamicResource WindowBackgroundBrush}">
 
     <Window.Resources>
         <!-- 旧页面用的样式名，这里改成指向新主题，页面标记基本不用动 -->
@@ -30,7 +30,9 @@
         </Style>
     </Window.Resources>
 
-    <Grid>
+    <!-- RootLayout 的不透明度由「控件不透明度」滑块控制：
+         调低它，卡片与输入框就会透出窗口自身的背景图（自定义背景挂在这里）。 -->
+    <Grid x:Name="RootLayout">
         <Grid.RowDefinitions>
             <RowDefinition Height="Auto"/>
             <RowDefinition Height="*"/>
@@ -45,14 +47,14 @@
                         Content="&#xE700;"
                         ToolTip="{Binding [Nav_Toggle], Source={x:Static services:Loc.Instance}}"/>
                 <Border Width="30" Height="30" CornerRadius="8" Margin="10,0,0,0"
-                        Background="{StaticResource AccentBrush}">
+                        Background="{DynamicResource AccentBrush}">
                     <TextBlock Text="◎" FontSize="16" Foreground="White"
                                HorizontalAlignment="Center" VerticalAlignment="Center"/>
                 </Border>
                 <TextBlock Text="{Binding [App_Title], Source={x:Static services:Loc.Instance}}"
                            FontSize="19" FontWeight="SemiBold" Margin="10,0,0,0"
                            VerticalAlignment="Center"
-                           Foreground="{StaticResource TextPrimaryBrush}"/>
+                           Foreground="{DynamicResource TextPrimaryBrush}"/>
             </StackPanel>
 
             <TextBlock x:Name="TxtHeaderVersion" HorizontalAlignment="Right" VerticalAlignment="Center"
@@ -69,7 +71,7 @@
             <!-- 侧边栏 -->
             <Border x:Name="NavPanel" Grid.Column="0" Width="248"
                     ClipToBounds="True"
-                    Background="{StaticResource SubtleFillBrush}"
+                    Background="{DynamicResource SubtleFillBrush}"
                     CornerRadius="8" Padding="0,6">
                 <ScrollViewer VerticalScrollBarVisibility="Auto" HorizontalScrollBarVisibility="Disabled">
                     <StackPanel>
@@ -150,7 +152,7 @@
                         <StackPanel>
                             <StackPanel Orientation="Horizontal" Margin="0,0,0,16">
                                 <Border Style="{StaticResource PageChipBorder}"
-                                        Background="{StaticResource ChipBlueSoftBrush}">
+                                        Background="{DynamicResource ChipBlueSoftBrush}">
                                     <TextBlock Text="🏠" FontSize="19"
                                                HorizontalAlignment="Center" VerticalAlignment="Center"/>
                                 </Border>
@@ -223,7 +225,7 @@
                         <StackPanel>
                             <StackPanel Orientation="Horizontal" Margin="0,0,0,16">
                                 <Border Style="{StaticResource PageChipBorder}"
-                                        Background="{StaticResource ChipMagentaSoftBrush}">
+                                        Background="{DynamicResource ChipMagentaSoftBrush}">
                                     <TextBlock Text="⚡" FontSize="19"
                                                HorizontalAlignment="Center" VerticalAlignment="Center"/>
                                 </Border>
@@ -261,9 +263,9 @@
                                                 IsSnapToTickEnabled="True" TickFrequency="10"
                                                 VerticalAlignment="Center" ValueChanged="OnHoldChanged"/>
                                         <Border Grid.Column="2" Margin="8,0,0,0" CornerRadius="5"
-                                                Background="{StaticResource AccentSoftBrush}" Padding="8,3">
+                                                Background="{DynamicResource AccentSoftBrush}" Padding="8,3">
                                             <TextBlock x:Name="TxtHoldValue" HorizontalAlignment="Center"
-                                                       Foreground="{StaticResource AccentBrush}"
+                                                       Foreground="{DynamicResource AccentBrush}"
                                                        FontWeight="SemiBold" FontSize="12.5"/>
                                         </Border>
                                     </Grid>
@@ -398,7 +400,7 @@
 
                     <StackPanel Grid.Row="0" Orientation="Horizontal" Margin="0,0,0,16">
                         <Border Style="{StaticResource PageChipBorder}"
-                                Background="{StaticResource ChipGreenSoftBrush}">
+                                Background="{DynamicResource ChipGreenSoftBrush}">
                             <TextBlock Text="🧩" FontSize="19"
                                        HorizontalAlignment="Center" VerticalAlignment="Center"/>
                         </Border>
@@ -533,7 +535,7 @@
 
                     <StackPanel Grid.Row="0" Orientation="Horizontal" Margin="0,0,0,16">
                         <Border Style="{StaticResource PageChipBorder}"
-                                Background="{StaticResource ChipPurpleSoftBrush}">
+                                Background="{DynamicResource ChipPurpleSoftBrush}">
                             <TextBlock Text="🎨" FontSize="19"
                                        HorizontalAlignment="Center" VerticalAlignment="Center"/>
                         </Border>
@@ -571,11 +573,11 @@
                                             <ColumnDefinition Width="*"/>
                                         </Grid.ColumnDefinitions>
                                         <Grid.RowDefinitions>
-                                            <RowDefinition Height="38"/>
-                                            <RowDefinition Height="38"/>
-                                            <RowDefinition Height="38"/>
-                                            <RowDefinition Height="38"/>
-                                            <RowDefinition Height="38"/>
+                                            <RowDefinition Height="46"/>
+                                            <RowDefinition Height="46"/>
+                                            <RowDefinition Height="46"/>
+                                            <RowDefinition Height="46"/>
+                                            <RowDefinition Height="46"/>
                                             <RowDefinition Height="Auto"/>
                                         </Grid.RowDefinitions>
 
@@ -662,7 +664,7 @@
                                                 ValueChanged="OnAppearanceSliderChanged"/>
                                         <TextBlock x:Name="TxtScaleValue" Grid.Row="0" Grid.Column="2"
                                                    VerticalAlignment="Center" TextAlignment="Right"
-                                                   Foreground="{StaticResource TextSecondaryBrush}" FontSize="12.5"/>
+                                                   Foreground="{DynamicResource TextSecondaryBrush}" FontSize="12.5"/>
 
                                         <TextBlock Grid.Row="1" Grid.Column="0" Style="{StaticResource FieldLabel}"
                                                    Text="{Binding [Appearance_ItemSize], Source={x:Static services:Loc.Instance}}"/>
@@ -671,7 +673,7 @@
                                                 ValueChanged="OnAppearanceSliderChanged"/>
                                         <TextBlock x:Name="TxtItemSizeValue" Grid.Row="1" Grid.Column="2"
                                                    VerticalAlignment="Center" TextAlignment="Right"
-                                                   Foreground="{StaticResource TextSecondaryBrush}" FontSize="12.5"/>
+                                                   Foreground="{DynamicResource TextSecondaryBrush}" FontSize="12.5"/>
 
                                         <TextBlock Grid.Row="2" Grid.Column="0" Style="{StaticResource FieldLabel}"
                                                    Text="{Binding [Appearance_DeadZone], Source={x:Static services:Loc.Instance}}"/>
@@ -680,7 +682,7 @@
                                                 ValueChanged="OnAppearanceSliderChanged"/>
                                         <TextBlock x:Name="TxtDeadZoneValue" Grid.Row="2" Grid.Column="2"
                                                    VerticalAlignment="Center" TextAlignment="Right"
-                                                   Foreground="{StaticResource TextSecondaryBrush}" FontSize="12.5"/>
+                                                   Foreground="{DynamicResource TextSecondaryBrush}" FontSize="12.5"/>
 
                                         <TextBlock Grid.Row="3" Grid.Column="0" Style="{StaticResource FieldLabel}"
                                                    Text="{Binding [Appearance_Opacity], Source={x:Static services:Loc.Instance}}"/>
@@ -689,7 +691,7 @@
                                                 ValueChanged="OnAppearanceSliderChanged"/>
                                         <TextBlock x:Name="TxtOpacityValue" Grid.Row="3" Grid.Column="2"
                                                    VerticalAlignment="Center" TextAlignment="Right"
-                                                   Foreground="{StaticResource TextSecondaryBrush}" FontSize="12.5"/>
+                                                   Foreground="{DynamicResource TextSecondaryBrush}" FontSize="12.5"/>
                                     </Grid>
                                 </GroupBox>
 
@@ -725,7 +727,7 @@
 
                     <StackPanel Grid.Row="0" Orientation="Horizontal" Margin="0,0,0,16">
                         <Border Style="{StaticResource PageChipBorder}"
-                                Background="{StaticResource ChipOrangeSoftBrush}">
+                                Background="{DynamicResource ChipOrangeSoftBrush}">
                             <TextBlock Text="🧰" FontSize="19"
                                        HorizontalAlignment="Center" VerticalAlignment="Center"/>
                         </Border>
@@ -873,7 +875,7 @@
                         <StackPanel>
                             <StackPanel Orientation="Horizontal" Margin="0,0,0,16">
                                 <Border Style="{StaticResource PageChipBorder}"
-                                        Background="{StaticResource ChipTealSoftBrush}">
+                                        Background="{DynamicResource ChipTealSoftBrush}">
                                     <TextBlock Text="⚙" FontSize="19"
                                                HorizontalAlignment="Center" VerticalAlignment="Center"/>
                                 </Border>
@@ -912,7 +914,7 @@
                                             <TextBlock x:Name="TxtFontPreview"
                                                        Text="轮盘启动器 Radial Launcher · 0123456789"
                                                        FontSize="19"
-                                                       Foreground="{StaticResource TextPrimaryBrush}"/>
+                                                       Foreground="{DynamicResource TextPrimaryBrush}"/>
                                             <TextBlock x:Name="TxtFontNote" Margin="0,6,0,0"
                                                        Style="{StaticResource HintText}"/>
                                         </StackPanel>
@@ -920,6 +922,96 @@
 
                                     <TextBlock Margin="0,8,0,0" Style="{StaticResource HintText}"
                                                Text="{Binding [System_FontHint], Source={x:Static services:Loc.Instance}}"/>
+                                </StackPanel>
+                            </GroupBox>
+
+                            <!-- ===== 界面外观：深色模式 / 自定义背景 / 控件不透明度 ===== -->
+                            <GroupBox Header="{Binding [System_AppearanceGroup], Source={x:Static services:Loc.Instance}}">
+                                <StackPanel>
+                                    <CheckBox x:Name="CbDarkMode"
+                                              Content="{Binding [System_DarkMode], Source={x:Static services:Loc.Instance}}"
+                                              Checked="OnDarkModeChanged" Unchecked="OnDarkModeChanged"/>
+                                    <TextBlock Margin="50,0,0,12" Style="{StaticResource HintText}"
+                                               Text="{Binding [System_DarkModeHint], Source={x:Static services:Loc.Instance}}"/>
+
+                                    <CheckBox x:Name="CbCustomBackground"
+                                              Content="{Binding [System_CustomBackground], Source={x:Static services:Loc.Instance}}"
+                                              Checked="OnBackgroundFlagChanged" Unchecked="OnBackgroundFlagChanged"/>
+                                    <TextBlock Margin="50,0,0,10" Style="{StaticResource HintText}"
+                                               Text="{Binding [System_BackgroundHint], Source={x:Static services:Loc.Instance}}"/>
+
+                                    <Border Margin="50,0,0,0" Style="{StaticResource InsetCardBorder}">
+                                        <Grid>
+                                            <Grid.ColumnDefinitions>
+                                                <ColumnDefinition Width="Auto"/>
+                                                <ColumnDefinition Width="*"/>
+                                                <ColumnDefinition Width="Auto"/>
+                                            </Grid.ColumnDefinitions>
+
+                                            <Border Grid.Column="0" Width="120" Height="68" CornerRadius="5"
+                                                    Margin="0,0,12,0" ClipToBounds="True"
+                                                    Background="{DynamicResource SubtleFillBrush}"
+                                                    BorderBrush="{DynamicResource CardBorderBrush}"
+                                                    BorderThickness="1">
+                                                <Image x:Name="ImgBackgroundPreview" Stretch="UniformToFill"/>
+                                            </Border>
+
+                                            <TextBlock x:Name="TxtBackgroundPath" Grid.Column="1"
+                                                       VerticalAlignment="Center" TextTrimming="CharacterEllipsis"
+                                                       Style="{StaticResource HintText}"/>
+
+                                            <StackPanel Grid.Column="2" Orientation="Horizontal" VerticalAlignment="Center">
+                                                <Button Style="{StaticResource MiniButton}"
+                                                        Content="{Binding [System_BackgroundChoose], Source={x:Static services:Loc.Instance}}"
+                                                        Click="OnChooseBackground"/>
+                                                <Button Style="{StaticResource MiniButton}"
+                                                        Content="{Binding [System_BackgroundClear], Source={x:Static services:Loc.Instance}}"
+                                                        Click="OnClearBackground"/>
+                                            </StackPanel>
+                                        </Grid>
+                                    </Border>
+
+                                    <Grid Margin="50,16,0,0">
+                                        <Grid.ColumnDefinitions>
+                                            <ColumnDefinition Width="190"/>
+                                            <ColumnDefinition Width="*"/>
+                                            <ColumnDefinition Width="70"/>
+                                        </Grid.ColumnDefinitions>
+
+                                        <TextBlock Grid.Column="0" Style="{StaticResource FieldLabel}"
+                                                   Text="{Binding [System_PanelOpacity], Source={x:Static services:Loc.Instance}}"/>
+                                        <Slider x:Name="SldPanelOpacity" Grid.Column="1"
+                                                Minimum="0.25" Maximum="1.0"
+                                                TickFrequency="0.05" IsSnapToTickEnabled="True"
+                                                ValueChanged="OnPanelOpacityChanged"/>
+                                        <TextBlock x:Name="TxtPanelOpacityValue" Grid.Column="2"
+                                                   VerticalAlignment="Center" TextAlignment="Right"
+                                                   Foreground="{DynamicResource TextSecondaryBrush}" FontSize="12.5"/>
+                                    </Grid>
+                                    <TextBlock Margin="50,4,0,0" Style="{StaticResource HintText}"
+                                               Text="{Binding [System_PanelOpacityHint], Source={x:Static services:Loc.Instance}}"/>
+                                </StackPanel>
+                            </GroupBox>
+
+                            <!-- ===== 测试模式 ===== -->
+                            <GroupBox Header="{Binding [System_TestMode], Source={x:Static services:Loc.Instance}}">
+                                <StackPanel>
+                                    <CheckBox x:Name="CbTestMode"
+                                              Content="{Binding [System_TestModeEnable], Source={x:Static services:Loc.Instance}}"/>
+                                    <TextBlock Margin="50,0,0,10" Style="{StaticResource HintText}"
+                                               Text="{Binding [System_TestModeHint], Source={x:Static services:Loc.Instance}}"/>
+
+                                    <TextBlock x:Name="TxtSessionLog" Margin="50,0,0,10"
+                                               Style="{StaticResource HintText}"/>
+
+                                    <StackPanel Orientation="Horizontal" Margin="50,0,0,0">
+                                        <Button Style="{StaticResource MiniButton}"
+                                                Content="{Binding [System_OpenSessionLog], Source={x:Static services:Loc.Instance}}"
+                                                Click="OnOpenSessionLog"/>
+                                    </StackPanel>
+
+                                    <TextBlock Margin="50,10,0,0" Style="{StaticResource HintText}"
+                                               Text="{Binding [System_TestArgumentHint], Source={x:Static services:Loc.Instance}}"/>
                                 </StackPanel>
                             </GroupBox>
 
@@ -983,7 +1075,7 @@
 
                     <StackPanel Grid.Row="0" Orientation="Horizontal" Margin="0,0,0,16">
                         <Border Style="{StaticResource PageChipBorder}"
-                                Background="{StaticResource ChipGreySoftBrush}">
+                                Background="{DynamicResource ChipGreySoftBrush}">
                             <TextBlock Text="ℹ" FontSize="19"
                                        HorizontalAlignment="Center" VerticalAlignment="Center"/>
                         </Border>
@@ -1028,8 +1120,8 @@
 
         <!-- ==================== 底部操作栏 ==================== -->
         <Border Grid.Row="2" Margin="12,10,12,12" Padding="14,10"
-                Background="{StaticResource CardBackgroundBrush}"
-                BorderBrush="{StaticResource CardBorderBrush}" BorderThickness="1"
+                Background="{DynamicResource CardBackgroundBrush}"
+                BorderBrush="{DynamicResource CardBorderBrush}" BorderThickness="1"
                 CornerRadius="8">
             <Grid>
                 <TextBlock x:Name="TxtSaveHint" VerticalAlignment="Center"

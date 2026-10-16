@@ -287,11 +287,17 @@ namespace RadialLauncher.Services
         }
 
         /// <summary>
-        /// 钩子回调耗时超标时的告警。
-        /// 日志已经是后台线程批量落盘（调用方只入队），所以这里直接写即可 —— 少一跳 UI，
-        /// 时间戳也更接近真实发生时刻。
+        /// 记录钩子回调耗时。
+        ///
+        /// <para><b>必须零分配。</b>低级钩子回调每秒可能被调用上千次（高回报率鼠标的
+        /// WM_MOUSEMOVE 尤其密集），如果每次回调都去拼那句告警字符串，就会源源不断地
+        /// 制造垃圾、把 Gen0 回收逼成高频事件。一旦某次 GC 暂停叠上开机时的磁盘/CPU 争抢
+        /// 超过 Windows 的 LowLevelHooksTimeout（默认 300ms），系统会直接绕过本钩子 ——
+        /// 表现就是整个系统的键鼠输入一起卡住、任务栏（explorer）失去响应甚至被重启。</para>
+        ///
+        /// <para>所以这里只做数值比较：没超阈值就直接返回，超了才拼字符串。</para>
         /// </summary>
-        private void ReportSlowHook(double elapsedMs, string which)
+        private void TrackHookDuration(double elapsedMs, bool isMouse, int msg)
         {
             if (elapsedMs > _maxHookMs) _maxHookMs = elapsedMs;
 
@@ -299,6 +305,11 @@ namespace RadialLauncher.Services
             if (_slowHookReports >= MaxSlowHookReports) return;
 
             _slowHookReports++;
+
+            var which = isMouse
+                ? "鼠标 " + DescribeMouseMessage(msg)
+                : "键盘 " + DescribeKeyboardMessage(msg);
+
             Logger.Warn($"钩子回调（{which}）耗时 {elapsedMs:0.0} ms，超过 {SlowHookWarnMs:0} ms 阈值");
         }
 
@@ -762,8 +773,8 @@ namespace RadialLauncher.Services
             }
             finally
             {
-                ReportSlowHook(TicksToMs(Stopwatch.GetTimestamp() - start),
-                    "键盘 " + DescribeKeyboardMessage(msg));
+                // 注意：这里绝不能拼字符串（每次回调都会执行），只传原始数值
+                TrackHookDuration(TicksToMs(Stopwatch.GetTimestamp() - start), isMouse: false, msg);
             }
 
             return result.Swallow
@@ -834,8 +845,8 @@ namespace RadialLauncher.Services
             }
             finally
             {
-                ReportSlowHook(TicksToMs(Stopwatch.GetTimestamp() - start),
-                    "鼠标 " + DescribeMouseMessage(msg));
+                // 同上：这里每次鼠标移动都会走到，拼字符串等于给 GC 上强度
+                TrackHookDuration(TicksToMs(Stopwatch.GetTimestamp() - start), isMouse: true, msg);
             }
 
             return result.Swallow

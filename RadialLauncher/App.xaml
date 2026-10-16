@@ -5,7 +5,11 @@
     <Application.Resources>
         <ResourceDictionary>
             <ResourceDictionary.MergedDictionaries>
-                <!-- 设计标记：颜色 / 字体 / 文字样式 -->
+                <!-- 调色板（浅色）。深色模式由 ThemeManager 整份换成 Palette.Dark.xaml。
+                     必须排在 Theme.xaml / Controls.xaml 之前：后两者用 DynamicResource
+                     引用这里的画刷，运行时替换这一项即可全界面换肤。 -->
+                <ResourceDictionary Source="Styles/Palette.Light.xaml"/>
+                <!-- 结构：字体 / 字号 / 文字与卡片样式 -->
                 <ResourceDictionary Source="Styles/Theme.xaml"/>
                 <!-- 控件外观：按钮 / 开关 / 滑条 / 卡片 / 导航 … -->
                 <ResourceDictionary Source="Styles/Controls.xaml"/>
