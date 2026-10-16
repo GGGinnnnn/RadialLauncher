@@ -140,8 +140,21 @@ namespace RadialLauncher
             }
 
             // ---- 同步开机自启状态 ----
-            if (configService.Config.System.AutoStart != AutoStartService.IsEnabled())
-                AutoStartService.SetEnabled(configService.Config.System.AutoStart);
+            //
+            // 判据不能只比“开关是否一致”：残留的失效登记项会让 IsEnabled() 与配置都呈
+            // “已开启”而被跳过，于是自启永远修不回来（下载了 v0.6、旧的 v0.5 被删，
+            // Run 项还指着 v0.5 的路径 —— 开机静默无反应，界面却显示已开启）。
+            // 所以这里连“是否指向当前这个 exe”一起判。
+            if (configService.Config.System.AutoStart)
+            {
+                if (!AutoStartService.IsEnabled() || !AutoStartService.PointsToCurrentExecutable())
+                    AutoStartService.SetEnabled(true);
+            }
+            else if (AutoStartService.GetRegisteredCommand() != null)
+            {
+                // 配置要求关闭：无论是生效的还是残留的登记项，都清掉
+                AutoStartService.SetEnabled(false);
+            }
 
             // ---- 主窗口（隐藏的托盘宿主）----
             _main = new MainWindow(configService);

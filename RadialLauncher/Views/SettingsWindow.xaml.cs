@@ -187,6 +187,8 @@ namespace RadialLauncher.Views
                 CbAnimation.IsChecked = c.Trigger.EnableAnimation;
                 CbExecuteOnRelease.IsChecked = c.Appearance.ExecuteOnRelease;
 
+                // 反映“自启是否真的会生效”（含路径有效性与任务管理器禁用状态），
+                // 而不是“注册表里有没有登记” —— 否则会显示成勾选着、开机却没反应。
                 CbAutoStart.IsChecked = AutoStartService.IsEnabled();
                 CbSystemRunAsAdmin.IsChecked = c.System.RunAsAdmin;
                 CbShowTrayTip.IsChecked = c.System.ShowTrayTip;
