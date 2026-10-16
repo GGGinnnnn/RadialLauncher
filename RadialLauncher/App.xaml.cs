@@ -508,16 +508,37 @@ namespace RadialLauncher
                 {
                     Dispatcher.BeginInvoke(new Action(() =>
                     {
+                        // 只有真的把设置面板叫出来了才回应答。
+                        //
+                        // 这一点很关键：新实例是靠这条回执判断“老实例还活着”的 ——
+                        // 收到就自己退出、把位置让给老实例。如果老实例已经半死不活
+                        // （界面还在跑但窗口弹不出来），却照样回应答，用户就会陷入
+                        // “双击 exe 没反应、也没新进程、只能去任务管理器结束旧的”。
+                        // 所以这里改成“办成了才回执”，办不成就不吭声，
+                        // 让新实例按“对方未响应”处理、自己启动一份。
+                        bool opened = false;
+
                         try
                         {
-                            _main?.OpenSettings();
+                            if (_main != null)
+                            {
+                                _main.OpenSettings();
+                                opened = true;
+                            }
                         }
                         catch (Exception ex)
                         {
                             Logger.Warn("响应激活请求失败：" + ex.Message);
                         }
 
-                        try { _ackEvent?.Set(); } catch { }
+                        if (opened)
+                        {
+                            try { _ackEvent?.Set(); } catch { }
+                        }
+                        else
+                        {
+                            Logger.Warn("无法弹出设置面板，放弃本次激活回执（让新实例自己启动）");
+                        }
                     }));
                 }
                 catch
