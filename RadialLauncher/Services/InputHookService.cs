@@ -514,9 +514,12 @@ namespace RadialLauncher.Services
         {
             if (_kbHook == IntPtr.Zero)
             {
+                // hMod 传 IntPtr.Zero：低级钩子的回调在本进程内执行，不需要模块句柄。
+                // 传 GetModuleHandleW(null) 在**单文件发布**下拿到的是 apphost 的模块句柄，
+                // 与真正存放回调的程序集对不上 —— 表现为 SetWindowsHookEx 成功返回、
+                // 日志也打印"钩子已安装"，但回调一次都不会被调用（整个触发功能失效）。
                 _kbHook = NativeMethods.SetWindowsHookExW(
-                    NativeMethods.WH_KEYBOARD_LL, _kbProc,
-                    NativeMethods.GetModuleHandleW(null), 0);
+                    NativeMethods.WH_KEYBOARD_LL, _kbProc, IntPtr.Zero, 0);
                 if (_kbHook == IntPtr.Zero)
                     Logger.Error("安装键盘钩子失败，错误码 " + Marshal.GetLastWin32Error());
                 else
@@ -526,8 +529,7 @@ namespace RadialLauncher.Services
             if (_mouseHook == IntPtr.Zero)
             {
                 _mouseHook = NativeMethods.SetWindowsHookExW(
-                    NativeMethods.WH_MOUSE_LL, _mouseProc,
-                    NativeMethods.GetModuleHandleW(null), 0);
+                    NativeMethods.WH_MOUSE_LL, _mouseProc, IntPtr.Zero, 0);
                 if (_mouseHook == IntPtr.Zero)
                     Logger.Error("安装鼠标钩子失败，错误码 " + Marshal.GetLastWin32Error());
                 else

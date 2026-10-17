@@ -64,6 +64,31 @@ namespace RadialLauncher.Services
             catch (Exception ex)
             {
                 Logger.Error("写入托盘图标文件失败", ex);
+                Logger.LeaveBreadcrumb("写入托盘图标文件失败", ex);
+                return null;
+            }
+        }
+
+        /// <summary>
+        /// 直接在内存里造一个 Icon，**完全不碰磁盘**。
+        ///
+        /// <para>为什么需要这条路径：原来的做法是把 ICO 写到数据目录再读回来，
+        /// 一旦数据目录不可写（权限、只读介质、被安全软件拦、路径异常……），
+        /// 图标文件就写不出来，托盘图标整个消失，而且失败是静默的 ——
+        /// 用户看到的就是"程序在后台跑着，但托盘里什么都没有"。
+        /// 图标本来只需要几个 KB 的内存，没有任何理由依赖磁盘。</para>
+        /// </summary>
+        public static System.Drawing.Icon? CreateIcon()
+        {
+            try
+            {
+                var bytes = BuildIco(16, 20, 24, 32, 48);
+                using var ms = new MemoryStream(bytes);
+                return new System.Drawing.Icon(ms);
+            }
+            catch (Exception ex)
+            {
+                Logger.Error("在内存中生成托盘图标失败", ex);
                 return null;
             }
         }

@@ -153,7 +153,7 @@ namespace RadialLauncher
         {
             if (_trayWatchdog != null) return;
 
-            int refreshesLeft = Tray.IconSource != null ? 2 : 0;
+            int refreshesLeft = HasTrayIcon() ? 2 : 0;
 
             _trayWatchdog = new DispatcherTimer(DispatcherPriority.Background)
             {
@@ -164,7 +164,7 @@ namespace RadialLauncher
             {
                 _trayAttempts++;
 
-                if (Tray.IconSource == null)
+                if (!HasTrayIcon())
                 {
                     if (_trayAttempts > TrayRetryMaxAttempts)
                     {
@@ -195,6 +195,13 @@ namespace RadialLauncher
 
             _trayWatchdog.Start();
         }
+
+        /// <summary>
+        /// 托盘图标是否已经挂上。
+        /// 两条路径都要算：内存生成的 Icon（首选）和写文件再读回来的 IconSource（兜底）。
+        /// 只判 IconSource 会让看门狗以为一直没成功，于是无限重试。
+        /// </summary>
+        private bool HasTrayIcon() => Tray.Icon != null || Tray.IconSource != null;
 
         /// <summary>把已挂上的托盘图标重挂一次（置空再赋值，强制走一遍 Shell_NotifyIcon）。</summary>
         private void RefreshTrayIcon()
@@ -315,15 +322,26 @@ namespace RadialLauncher
         {
             try
             {
-                var icon = TrayIconFactory.GetIcon();
-                if (icon == null)
+                // 优先用"纯内存"的 Icon：不依赖数据目录可写。
+                // 旧做法要先把 ICO 落到数据目录再读回来，数据目录一不可写就没有托盘图标。
+                var icon = TrayIconFactory.CreateIcon();
+                if (icon != null)
+                {
+                    Tray.Icon = icon;
+                    Logger.Info("托盘图标已设置（内存生成）");
+                    return;
+                }
+
+                // 兜底：退回老的"写文件再读回来"路径
+                var frame = TrayIconFactory.GetIcon();
+                if (frame == null)
                 {
                     Logger.Warn("托盘图标生成失败，托盘将不可见");
                     return;
                 }
 
-                Tray.IconSource = icon;
-                Logger.Info("托盘图标已设置");
+                Tray.IconSource = frame;
+                Logger.Info("托盘图标已设置（文件方式）");
             }
             catch (Exception ex)
             {

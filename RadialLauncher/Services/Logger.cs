@@ -228,13 +228,49 @@ namespace RadialLauncher.Services
                         RotateIfNeeded();
                     }
                 }
-                catch
+                catch (Exception ex)
                 {
                     CloseStreamLocked();
+                    LeaveBreadcrumb("写入常规日志失败", ex);
                 }
 
                 // 测试模式：同一批内容再写一份详细日志
                 WriteSessionLocked(text);
+            }
+        }
+
+        /// <summary>已写过面包屑就不再重复写，避免每批日志都追加一次。</summary>
+        private static bool _breadcrumbWritten;
+
+        /// <summary>
+        /// 日志写盘失败时的"最后手段"：往 exe 同级丢一个诊断文件。
+        ///
+        /// <para>为什么放在 exe 同级而不是数据目录：如果出问题的正是数据目录本身
+        /// （路径算错、目录建不出来、没有权限），把它写到数据目录里等于什么都没留下 ——
+        /// 用户来报"程序在跑但一个日志都没有"时就完全无从下手。exe 同级是程序自己
+        /// 所在的目录，能跑起来就大概率能写。</para>
+        /// </summary>
+        internal static void LeaveBreadcrumb(string stage, Exception ex)
+        {
+            if (_breadcrumbWritten) return;
+            _breadcrumbWritten = true;
+
+            try
+            {
+                var path = Path.Combine(AppContext.BaseDirectory, "logger-error.txt");
+
+                File.AppendAllText(path,
+                    $"[{DateTime.Now:yyyy-MM-dd HH:mm:ss}] {stage}{Environment.NewLine}" +
+                    $"  解析出的数据目录 : {DirectoryPath}{Environment.NewLine}" +
+                    $"  exe 所在目录     : {AppContext.BaseDirectory}{Environment.NewLine}" +
+                    $"  进程路径         : {Environment.ProcessPath ?? "(未知)"}{Environment.NewLine}" +
+                    $"  当前工作目录     : {Environment.CurrentDirectory}{Environment.NewLine}" +
+                    $"  目录存在         : {System.IO.Directory.Exists(DirectoryPath)}{Environment.NewLine}" +
+                    $"  异常             : {ex}{Environment.NewLine}{Environment.NewLine}");
+            }
+            catch
+            {
+                // 连面包屑都写不了就真的没办法了
             }
         }
 
@@ -391,6 +427,7 @@ namespace RadialLauncher.Services
             catch (Exception ex)
             {
                 _sessionPath = null;
+                LeaveBreadcrumb("开启测试模式失败", ex);
                 Warn("开启测试模式失败：" + ex.Message);
             }
         }
