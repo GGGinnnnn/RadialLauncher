@@ -1,4 +1,3 @@
-<img width="385" height="412" alt="808914e4f3b592655551ac28212aafe8" src="https://github.com/user-attachments/assets/8dda3e1c-3612-48e3-8f54-35eed34e12fb" />
 # Radial Launcher
 
 按住 **Ctrl** / **Win** / **Alt** / **鼠标中键**，或**任意自定义按键**，在鼠标位置唤出的轮盘启动器。
