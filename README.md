@@ -1,3 +1,4 @@
+<img width="385" height="412" alt="808914e4f3b592655551ac28212aafe8" src="https://github.com/user-attachments/assets/8dda3e1c-3612-48e3-8f54-35eed34e12fb" />
 # Radial Launcher
 
 按住 **Ctrl** / **Win** / **Alt** / **鼠标中键**，或**任意自定义按键**，在鼠标位置唤出的轮盘启动器。
@@ -16,7 +17,8 @@ Windows 10 / 11（64 位）· .NET 8 · WPF · 免安装
 移动鼠标选中某一项，松开触发键就执行——不用记快捷键，也不用离开鼠标。
 
 ```
-![808914e4f3b592655551ac28212aafe8](https://gin.zmal.top/picx-images-hosting/808914e4f3b592655551ac28212aafe8.99u5etkxk4.webp)
+<img width="385" height="412" alt="808914e4f3b592655551ac28212aafe8" src="https://github.com/user-attachments/assets/aab42d59-50d0-42f2-b167-fcfe635970cb" />
+
 ```
 
 支持 **4 向 / 8 向**两种排布，支持**点击执行**（而不是松手执行），
