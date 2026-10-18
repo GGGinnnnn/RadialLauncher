@@ -15,10 +15,7 @@ Windows 10 / 11（64 位）· .NET 8 · WPF · 免安装
 一个常驻托盘的轮盘启动器。按住触发键，鼠标处弹出一个环形菜单，
 移动鼠标选中某一项，松开触发键就执行——不用记快捷键，也不用离开鼠标。
 
-```
-<img width="385" height="412" alt="808914e4f3b592655551ac28212aafe8" src="https://github.com/user-attachments/assets/aab42d59-50d0-42f2-b167-fcfe635970cb" />
-
-```
+![808914e4f3b592655551ac28212aafe8](https://gin.zmal.top/picx-images-hosting/808914e4f3b592655551ac28212aafe8.99u5etkxk4.webp)
 
 支持 **4 向 / 8 向**两种排布，支持**点击执行**（而不是松手执行），
 支持给特定程序（浏览器、VS Code 等）配一套**专属轮盘**。
