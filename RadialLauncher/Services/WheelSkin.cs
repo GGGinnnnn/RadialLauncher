@@ -55,11 +55,14 @@ namespace RadialLauncher.Services
     public static class WheelSkinCatalog
     {
         public const string DefaultId = "default";
-        public const string GenshinId = "genshin";
+        public const string RingId = "ring";
 
-        /// <summary>默认深色轮盘：克制、冷色、以强调蓝收边。</summary>
+        /// <summary>旧配置里这个皮肤曾经叫 genshin，读到时映射回来。</summary>
+        private const string RingLegacyId = "genshin";
+
+        /// <summary>默认 1：浮动圆钮，克制、冷色、以强调蓝收边。</summary>
         public static readonly WheelSkin Default = new(
-            DefaultId, "默认", "Default",
+            DefaultId, "默认 1", "Default 1",
             ShowSpokes: false,
             ShowCenterTicks: false,
             ShowInnerRing: true,
@@ -71,9 +74,9 @@ namespace RadialLauncher.Services
             PlateVignette: 0.18,
             GlowStrength: 1.0);
 
-        /// <summary>原神风：暖调半透明底盘、米色双环、辐条与刻度，金铜色高亮。</summary>
-        public static readonly WheelSkin Genshin = new(
-            GenshinId, "原神", "Genshin Impact",
+        /// <summary>默认 2：环形扇区，暖调底盘、米色双环、辐条与刻度，金铜色高亮。</summary>
+        public static readonly WheelSkin Ring = new(
+            RingId, "默认 2", "Default 2",
             ShowSpokes: true,
             ShowCenterTicks: true,
             ShowInnerRing: true,
@@ -86,10 +89,17 @@ namespace RadialLauncher.Services
             GlowStrength: 0.85,
             RingLayout: true);
 
-        public static IReadOnlyList<WheelSkin> All { get; } = new[] { Default, Genshin };
+        public static IReadOnlyList<WheelSkin> All { get; } = new[] { Default, Ring };
+
+        /// <summary>这个 id 是否指向环形皮肤（含旧配置里的 genshin）。</summary>
+        public static bool IsRing(string? id)
+            => string.Equals(id, RingId, System.StringComparison.OrdinalIgnoreCase)
+            || string.Equals(id, RingLegacyId, System.StringComparison.OrdinalIgnoreCase);
 
         public static WheelSkin Get(string? id)
         {
+            if (IsRing(id)) return Ring;
+
             foreach (var skin in All)
             {
                 if (string.Equals(skin.Id, id, System.StringComparison.OrdinalIgnoreCase)) return skin;
@@ -105,14 +115,14 @@ namespace RadialLauncher.Services
         public static (string Background, string Border, string Item, string ItemSelected, string Text)
             PresetFor(string? id)
         {
-            if (string.Equals(id, GenshinId, System.StringComparison.OrdinalIgnoreCase))
+            if (IsRing(id))
             {
                 // 底盘接近不透明：半透明底盘压在亮色桌面/窗口上会被"洗白"，
-                // 层次（双环、辐条、刻度）全都会看不见。游戏里这一层本来就很实。
+                // 层次（双环、辐条、刻度）全都会看不见。
                 return ("#E81B1922", "#F2E3C4", "#F72E2A36", "#FFE8B764", "#FFF7F0E3");
             }
 
-            // 默认：保持与旧版一致的配色
+            // 默认 1：保持与旧版一致的配色
             return ("#E61A1A2E", "#FF4A9EFF", "#E62A2A3A", "#FFFF6B35", "#FFFFFFFF");
         }
 

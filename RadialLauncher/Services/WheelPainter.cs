@@ -13,7 +13,7 @@ namespace RadialLauncher.Services
     ///
     /// <para>两种布局，由 <see cref="WheelSkin.RingLayout"/> 决定：</para>
     /// <list type="bullet">
-    ///   <item><b>环形（原神皮肤）</b>：由内到外是
+    ///   <item><b>环形（默认 2）</b>：由内到外是
     ///   「一大片空区（0 ~ 0.50R）→ 浅色圆环（0.50R ~ 0.66R）→
     ///   图标环带（0.66R ~ 0.98R，被细径向线切成扇区，图标落在 0.82R）→ 序号」。
     ///   中心不画实心圆盘，空区就是空的 —— 名字只在中心显示。

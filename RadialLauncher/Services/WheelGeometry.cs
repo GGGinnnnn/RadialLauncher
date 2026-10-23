@@ -42,7 +42,7 @@ namespace RadialLauncher.Services
         /// <summary>中心圆盘直径相对底盘直径的比例。</summary>
         public const double InnerRatio = 0.34;
 
-        // ---------- 环形布局（原神皮肤）的比例，全部相对底盘半径 ----------
+        // ---------- 环形布局（默认 2）的比例，全部相对底盘半径 ----------
 
         /// <summary>图标所在半径：0.82 —— 正好落在外侧环带的中线上。</summary>
         public const double RingSlotRadiusRatio = 0.822;

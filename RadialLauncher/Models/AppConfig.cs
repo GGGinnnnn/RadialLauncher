@@ -88,7 +88,7 @@ namespace RadialLauncher.Models
         public bool ExecuteOnRelease { get; set; } = true;
 
         /// <summary>
-        /// 轮盘皮肤：default（默认）/ genshin（原神）。
+        /// 轮盘皮肤：default（默认 1，浮动圆钮）/ ring（默认 2，环形扇区）。
         /// 皮肤只决定装饰风格（辐条、双环、渐变强度等）；上面那五个颜色才是实际用色，
         /// 切换皮肤时由设置面板把预设配色一并写进这五个字段，之后仍可自行微调。
         /// </summary>
