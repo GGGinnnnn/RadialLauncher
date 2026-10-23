@@ -120,13 +120,23 @@ namespace RadialLauncher.Views
                 Surface.Children.Add(content);
             }
 
-            // 中心提示
+            // 中心提示。
+            // 环形皮肤没有文字标签，所以预览里必须把选中项的名字显示出来，
+            // 否则就是一串看不出是什么的图标。
+            bool hasSelection = _selectedIndex >= 0 && _selectedIndex < _items.Count
+                && !string.IsNullOrWhiteSpace(_items[_selectedIndex].Name);
+
             var hint = new TextBlock
             {
-                Text = _items.Count == 0 ? Loc.T("Wheel_Empty") : Loc.T("Wheel_Release"),
-                FontSize = 10.5,
-                Foreground = new SolidColorBrush(Color.FromArgb(0xBB, textColor.R, textColor.G, textColor.B)),
+                Text = hasSelection
+                    ? _items[_selectedIndex].Name
+                    : (_items.Count == 0 ? Loc.T("Wheel_Empty") : Loc.T("Wheel_Release")),
+                FontSize = hasSelection ? 11.5 : 10.5,
+                FontWeight = hasSelection ? FontWeights.SemiBold : FontWeights.Normal,
+                Foreground = new SolidColorBrush(Color.FromArgb(0xEE, textColor.R, textColor.G, textColor.B)),
                 TextAlignment = TextAlignment.Center,
+                TextWrapping = TextWrapping.Wrap,
+                MaxWidth = Math.Max(40, g.PlateRadius * 0.85),
                 IsHitTestVisible = false,
             };
 

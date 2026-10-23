@@ -483,8 +483,10 @@ namespace RadialLauncher.Services
                 IsHitTestVisible = false,
             };
 
-            // 图标占环带宽度的大约四分之三：填满整条环带会显得拥挤
-            double iconSize = itemSize * 0.72;
+            // 图标占环带宽度的比例。
+            // 注意：程序图标的字形是顶满边框的，而内置原神图标四周自带留白，
+            // 所以不能按"填满整条环带"来设 —— 之前 0.72 会让程序图标明显溢出。
+            double iconSize = itemSize * 0.60;
             var image = TryResolveIcon(item, iconSize);
 
             FrameworkElement visual;
@@ -504,7 +506,7 @@ namespace RadialLauncher.Services
                 visual = new TextBlock
                 {
                     Text = string.IsNullOrWhiteSpace(item?.Icon) ? "＋" : item!.Icon,
-                    FontSize = Math.Max(15, itemSize * 0.66),
+                    FontSize = Math.Max(13, itemSize * 0.48),
                     Foreground = new SolidColorBrush(
                         WheelSkinCatalog.WithAlpha(textColor, selected ? (byte)255 : (byte)215)),
                     TextAlignment = TextAlignment.Center,

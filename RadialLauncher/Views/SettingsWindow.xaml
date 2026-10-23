@@ -804,6 +804,17 @@
                                             <TextBox x:Name="TxtIcon" Width="72" Margin="0,3,8,3"
                                                      FontSize="16" HorizontalContentAlignment="Center"
                                                      TextChanged="OnSlotTextChanged"/>
+                                            <!--
+                                              图标预览：垫一个深色圆底。
+                                              内置原神图标是白色字形，直接贴在浅色界面上完全看不见。
+                                            -->
+                                            <Grid x:Name="IconPreviewHost" Width="44" Height="44"
+                                                  Margin="0,3,10,3" Visibility="Collapsed">
+                                                <Ellipse Fill="#FF2B2833"/>
+                                                <Image x:Name="ImgIconPreview" Width="28" Height="28"
+                                                       Stretch="Uniform"
+                                                       RenderOptions.BitmapScalingMode="HighQuality"/>
+                                            </Grid>
                                             <Button Margin="0,3,10,3"
                                                     Content="{Binding [Functions_PickIcon], Source={x:Static services:Loc.Instance}}"
                                                     Click="OnPickIcon"/>

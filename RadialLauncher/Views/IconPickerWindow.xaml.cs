@@ -80,13 +80,17 @@ namespace RadialLauncher.Views
                 var button = new Button
                 {
                     Content = face,
-                    Width = 44,
-                    Height = 44,
-                    Margin = new Thickness(0, 0, 5, 5),
+                    Width = 46,
+                    Height = 46,
+                    Margin = new Thickness(0, 0, 6, 6),
+                    // 必须清掉样式自带的内边距：默认 Padding 会把 38px 的圆裁成半个
+                    Padding = new Thickness(0),
                     Cursor = System.Windows.Input.Cursors.Hand,
                     Background = Brushes.Transparent,
                     BorderBrush = new SolidColorBrush(Color.FromArgb(0x22, 0, 0, 0)),
                     BorderThickness = new Thickness(1),
+                    HorizontalContentAlignment = HorizontalAlignment.Center,
+                    VerticalContentAlignment = VerticalAlignment.Center,
                     ToolTip = Loc.Instance.IsEnglish ? en : zh,
                 };
 
@@ -120,14 +124,18 @@ namespace RadialLauncher.Views
                 var button = new Button
                 {
                     Content = emoji,
-                    Width = 44,
-                    Height = 44,
-                    Margin = new Thickness(0, 0, 5, 5),
+                    Width = 46,
+                    Height = 46,
+                    Margin = new Thickness(0, 0, 6, 6),
+                    // 同上：不清内边距的话 emoji 会被裁成碎片
+                    Padding = new Thickness(0),
                     FontSize = 20,
                     Cursor = System.Windows.Input.Cursors.Hand,
                     Background = Brushes.Transparent,
                     BorderBrush = new SolidColorBrush(Color.FromArgb(0x22, 0, 0, 0)),
                     BorderThickness = new Thickness(1),
+                    HorizontalContentAlignment = HorizontalAlignment.Center,
+                    VerticalContentAlignment = VerticalAlignment.Center,
                     ToolTip = emoji,
                 };
 

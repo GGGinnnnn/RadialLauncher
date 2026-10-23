@@ -777,7 +777,9 @@ namespace RadialLauncher.Views
                 ? target.Items
                 : _working.WheelItems;
 
-            Preview.Render(_working.Appearance, items, -1);
+            // 预览里给第一个槽位打上高亮：环形皮肤没有文字标签，
+            // 不高亮的话中心什么都不显示，整个预览就是"一串看不懂的图标"。
+            Preview.Render(_working.Appearance, items, items.Count > 0 ? 0 : -1);
 
             TxtScaleValue.Text = _working.Appearance.Scale.ToString("0.00");
             TxtItemSizeValue.Text = _working.Appearance.ItemSize.ToString("0");
@@ -1446,7 +1448,25 @@ namespace RadialLauncher.Views
             LstSlots.Items.Refresh();
         }
 
-        private void OnSlotTextChanged(object sender, TextChangedEventArgs e) => SaveSlotEditor();
+        private void OnSlotTextChanged(object sender, TextChangedEventArgs e)
+        {
+            SaveSlotEditor();
+            UpdateIconPreview();
+        }
+
+        /// <summary>
+        /// 刷新图标预览。
+        /// 没有图片可显示时（比如用 emoji 当图标）就把整个预览块收起来 ——
+        /// 那种情况下 TxtIcon 里已经能看到字符，不需要再占位置。
+        /// </summary>
+        private void UpdateIconPreview()
+        {
+            if (IconPreviewHost == null || ImgIconPreview == null) return;
+
+            var image = WheelPainter.TryResolveIcon(CurrentSlotItem(), 48);
+            ImgIconPreview.Source = image;
+            IconPreviewHost.Visibility = image != null ? Visibility.Visible : Visibility.Collapsed;
+        }
 
         private void OnSlotFlagChanged(object sender, RoutedEventArgs e) => SaveSlotEditor();
 
@@ -1485,6 +1505,8 @@ namespace RadialLauncher.Views
             TxtIconMode.Text = iconPath == "auto"
                 ? Loc.Pick("自动提取图标", "Auto icon")
                 : string.IsNullOrWhiteSpace(iconPath) ? "" : iconPath;
+
+            UpdateIconPreview();
 
             // 快捷键类型显示匹配到的功能名
             if (isShortcut)
