@@ -79,7 +79,8 @@ namespace RadialLauncher.Views
 
             // 槽位
             double itemSize = g.ItemSize;
-            double radius = g.Radius;
+            // 环形布局把图标推到外侧环带上（约 0.82R）
+            double radius = skin.RingLayout ? g.RingSlotRadius : g.Radius;
 
             for (int i = 0; i < directionCount; i++)
             {

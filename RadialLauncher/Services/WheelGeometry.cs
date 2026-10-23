@@ -42,6 +42,26 @@ namespace RadialLauncher.Services
         /// <summary>中心圆盘直径相对底盘直径的比例。</summary>
         public const double InnerRatio = 0.34;
 
+        // ---------- 环形布局（原神皮肤）的比例，全部相对底盘半径 ----------
+
+        /// <summary>图标所在半径：0.82 —— 正好落在外侧环带的中线上。</summary>
+        public const double RingSlotRadiusRatio = 0.822;
+
+        /// <summary>外侧环带（图标带）的外缘。</summary>
+        public const double RingBandOuterRatio = 0.984;
+
+        /// <summary>外侧环带（图标带）的内缘。</summary>
+        public const double RingBandInnerRatio = 0.665;
+
+        /// <summary>中间那圈浅色圆环的外缘。</summary>
+        public const double RingDonutOuterRatio = 0.660;
+
+        /// <summary>中间那圈浅色圆环的内缘 —— 再往里就是一大片空区。</summary>
+        public const double RingDonutInnerRatio = 0.498;
+
+        /// <summary>序号所在半径。</summary>
+        public const double RingBadgeRadiusRatio = 0.908;
+
         /// <summary>底盘描边粗细（显示光晕时加粗一点）。</summary>
         public const double BorderThicknessNormal = 2.0;
         public const double BorderThicknessGlow = 2.5;
@@ -98,6 +118,7 @@ namespace RadialLauncher.Services
                 WindowSize = windowSize,
                 GlowPadding = glowPadding,
                 InnerDiameter = plateDiameter * InnerRatio,
+                RingSlotRadius = plateRadius * RingSlotRadiusRatio,
                 BorderThickness = appearance.ShowGlow ? BorderThicknessGlow : BorderThicknessNormal,
                 DeadZone = System.Math.Max(12, appearance.DeadZone * scale),
                 IconFontSize = System.Math.Max(12, itemSize * IconFontFactor),
@@ -156,6 +177,9 @@ namespace RadialLauncher.Services
         public double WindowSize { get; init; }
         public double GlowPadding { get; init; }
         public double InnerDiameter { get; init; }
+
+        /// <summary>环形布局下圆心到图标中心的距离。</summary>
+        public double RingSlotRadius { get; init; }
         public double BorderThickness { get; init; }
         public double DeadZone { get; init; }
         public double IconFontSize { get; init; }

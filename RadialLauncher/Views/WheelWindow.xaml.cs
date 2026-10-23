@@ -271,7 +271,8 @@ namespace RadialLauncher.Views
             Menu.Width = windowSize;
             Menu.Height = windowSize;
             Menu.ItemCount = Math.Max(1, directionCount);
-            Menu.Radius = radius;
+            // 环形布局把图标推到外侧环带上（约 0.82R），浮钮布局用原来的半径
+            Menu.Radius = skin.RingLayout ? g.RingSlotRadius : radius;
             Menu.DeadZone = g.DeadZone;
             Menu.DefaultBrush = itemBrush;
             Menu.SelectedBrush = selectedBrush;
@@ -281,12 +282,22 @@ namespace RadialLauncher.Views
 
             CenterTitle.Foreground = textBrush;
             CenterSubtitle.Foreground = new SolidColorBrush(((SolidColorBrush)textBrush).Color) { Opacity = 0.6 };
-            CenterTitle.FontSize = Math.Max(11, 14 * scale);
-            CenterSubtitle.FontSize = Math.Max(9, 11 * scale);
 
-            // 中心文字必须待在中心盘里面 —— 之前用 radius*0.9 会宽出盘外
-            CenterTitle.MaxWidth = g.InnerDiameter * 0.80;
-            CenterSubtitle.MaxWidth = g.InnerDiameter * 0.80;
+            if (skin.RingLayout)
+            {
+                // 环形布局中间是一大片空区，文字可以大一些、宽一些
+                CenterTitle.FontSize = Math.Max(12, 17 * scale);
+                CenterSubtitle.FontSize = Math.Max(9, 11.5 * scale);
+                CenterTitle.MaxWidth = g.PlateRadius * 1.55;
+                CenterSubtitle.MaxWidth = g.PlateRadius * 1.55;
+            }
+            else
+            {
+                CenterTitle.FontSize = Math.Max(11, 14 * scale);
+                CenterSubtitle.FontSize = Math.Max(9, 11 * scale);
+                CenterTitle.MaxWidth = g.InnerDiameter * 0.80;
+                CenterSubtitle.MaxWidth = g.InnerDiameter * 0.80;
+            }
 
             // 重建选项
             Menu.Children.Clear();

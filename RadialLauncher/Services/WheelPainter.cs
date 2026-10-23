@@ -1,5 +1,4 @@
 using System;
-using System.Collections.Generic;
 using System.Windows;
 using System.Windows.Controls;
 using System.Windows.Media;
@@ -14,10 +13,11 @@ namespace RadialLauncher.Services
     ///
     /// <para>两种布局，由 <see cref="WheelSkin.RingLayout"/> 决定：</para>
     /// <list type="bullet">
-    ///   <item><b>环形（原神皮肤）</b>：一整块深色底盘 + 一圈"环带"，
-    ///   环带被 n 条极细的径向线切成扇区，图标直接浮在环带上，
-    ///   扇区外缘还有个小序号；选中时高亮整个扇区（扇形楔块），而不是把圆点换色。
-    ///   这就是游戏里那个样子。</item>
+    ///   <item><b>环形（原神皮肤）</b>：由内到外是
+    ///   「一大片空区（0 ~ 0.50R）→ 浅色圆环（0.50R ~ 0.66R）→
+    ///   图标环带（0.66R ~ 0.98R，被细径向线切成扇区，图标落在 0.82R）→ 序号」。
+    ///   中心不画实心圆盘，空区就是空的 —— 名字只在中心显示。
+    ///   选中时高亮整个扇区。</item>
     ///   <item><b>浮动圆钮（默认皮肤）</b>：每个槽位是一枚带渐变的圆钮，
     ///   选中时整枚换成高亮渐变。</item>
     /// </list>
@@ -25,13 +25,13 @@ namespace RadialLauncher.Services
     public static class WheelPainter
     {
         /// <summary>环带外缘相对底盘半径的比例。</summary>
-        public const double RingOuterRatio = 0.962;
+        public static double RingOuterRatio => WheelGeometry.RingBandOuterRatio;
 
         /// <summary>环带内缘相对底盘半径的比例。</summary>
-        public const double RingInnerRatio = 0.515;
+        public static double RingInnerRatio => WheelGeometry.RingBandInnerRatio;
 
         /// <summary>序号所在半径（相对底盘半径）。</summary>
-        public const double BadgeRadiusRatio = 0.888;
+        public static double BadgeRadiusRatio => WheelGeometry.RingBadgeRadiusRatio;
 
         // ============================ 背景 ============================
 
@@ -55,11 +55,18 @@ namespace RadialLauncher.Services
             DrawGlow(canvas, m, skin, rim, centerX, centerY, diameter, showGlow);
             DrawDisc(canvas, m, skin, plate, rim, centerX, centerY, diameter);
 
-            if (skin.RingLayout) DrawRingBand(canvas, m, skin, rim, text, centerX, centerY, plateR);
-            else DrawDecorRings(canvas, m, skin, rim, text, centerX, centerY, plateR);
-
-            DrawCenterDisc(canvas, m, skin, plate, rim, text, centerX, centerY);
-            if (skin.ShowCenterTicks) DrawCenterTicks(canvas, m, skin, text, centerX, centerY);
+            if (skin.RingLayout)
+            {
+                // 中间那圈浅色圆环 + 外侧图标环带；中间不画任何实体圆盘
+                DrawDonut(canvas, m, skin, text, centerX, centerY, plateR);
+                DrawRingBand(canvas, m, skin, text, centerX, centerY, plateR);
+            }
+            else
+            {
+                DrawDecorRings(canvas, m, skin, rim, text, centerX, centerY, plateR);
+                DrawCenterDisc(canvas, m, skin, plate, rim, text, centerX, centerY);
+                if (skin.ShowCenterTicks) DrawCenterTicks(canvas, m, skin, text, centerX, centerY);
+            }
         }
 
         private static void DrawGlow(Canvas canvas, WheelMetrics m, WheelSkin skin, Color rim,
@@ -73,7 +80,7 @@ namespace RadialLauncher.Services
                 double size = diameter + spread * 2;
                 byte peak = (byte)Math.Round(34 * skin.GlowStrength / layer);
 
-                var halo = new Ellipse
+                Place(canvas, new Ellipse
                 {
                     Width = size,
                     Height = size,
@@ -87,8 +94,7 @@ namespace RadialLauncher.Services
                             new(WheelSkinCatalog.WithAlpha(rim, 0), 1.0),
                         },
                     },
-                };
-                Place(canvas, halo, cx - size / 2, cy - size / 2);
+                }, cx - size / 2, cy - size / 2);
             }
         }
 
@@ -97,68 +103,84 @@ namespace RadialLauncher.Services
         {
             double r = diameter / 2;
 
-            Place(canvas, new Ellipse
-            {
-                Width = diameter,
-                Height = diameter,
-                IsHitTestVisible = false,
-                Fill = new RadialGradientBrush
+            // 环形布局的底盘中间不能被压暗 —— 中间是大片空区，
+            // 压暗会把它读成一个"大黑圆盘"，正是之前出错的地方。
+            var stops = skin.RingLayout
+                ? new GradientStopCollection
                 {
-                    GradientStops = new GradientStopCollection
-                    {
-                        new(WheelSkinCatalog.Darken(plate, skin.PlateVignette), 0.0),
-                        new(plate, 0.62),
-                        new(WheelSkinCatalog.Lighten(plate, 0.10), 1.0),
-                    },
-                },
-            }, cx - r, cy - r);
+                    new(plate, 0.0),
+                    new(plate, 0.62),
+                    new(WheelSkinCatalog.Darken(plate, 0.22), 1.0),
+                }
+                : new GradientStopCollection
+                {
+                    new(WheelSkinCatalog.Darken(plate, skin.PlateVignette), 0.0),
+                    new(plate, 0.62),
+                    new(WheelSkinCatalog.Lighten(plate, 0.10), 1.0),
+                };
 
             Place(canvas, new Ellipse
             {
                 Width = diameter,
                 Height = diameter,
                 IsHitTestVisible = false,
-                Stroke = new SolidColorBrush(WheelSkinCatalog.Fade(rim, skin.RimAlpha)),
+                Fill = new RadialGradientBrush { GradientStops = stops },
+            }, cx - r, cy - r);
+
+            // 外缘描边：环形布局里这圈很淡，只是一道收边
+            var rimColor = skin.RingLayout
+                ? WheelSkinCatalog.Fade(rim, skin.RimAlpha * 0.55)
+                : WheelSkinCatalog.Fade(rim, skin.RimAlpha);
+
+            Place(canvas, new Ellipse
+            {
+                Width = diameter,
+                Height = diameter,
+                IsHitTestVisible = false,
+                Stroke = new SolidColorBrush(rimColor),
                 StrokeThickness = Math.Max(1.0, m.BorderThickness),
                 Fill = null,
             }, cx - r, cy - r);
         }
 
-        /// <summary>
-        /// 环形布局：环带 + 扇区分隔线 + 序号。
-        /// 环带本身只是很淡的一层提亮，主要靠两条边界细线把"带"框出来。
-        /// </summary>
-        private static void DrawRingBand(Canvas canvas, WheelMetrics m, WheelSkin skin, Color rim,
-            Color text, double cx, double cy, double plateR)
+        /// <summary>中间那圈浅色圆环（空区与外环带之间的过渡）。</summary>
+        private static void DrawDonut(Canvas canvas, WheelMetrics m, WheelSkin skin, Color text,
+            double cx, double cy, double plateR)
         {
-            double outer = plateR * RingOuterRatio;
-            double inner = plateR * RingInnerRatio;
+            double inner = plateR * WheelGeometry.RingDonutInnerRatio;
+            double outer = plateR * WheelGeometry.RingDonutOuterRatio;
 
-            // 环带底色：两个同心圆 + 偶数填充规则做出圆环（不要用"再盖一个圆"，
-            // 底盘是半透明的，叠一层会把内圈压得比外圈还暗）
-            var annulus = new PathGeometry { FillRule = FillRule.EvenOdd };
-            annulus.Figures.Add(CircleFigure(cx, cy, outer));
-            annulus.Figures.Add(CircleFigure(cx, cy, inner));
-            annulus.Freeze();
+            AddAnnulus(canvas, cx, cy, inner, outer,
+                WheelSkinCatalog.WithAlpha(text, (byte)Math.Round(255 * 0.055)));
 
-            canvas.Children.Add(new Path
-            {
-                Data = annulus,
-                Fill = new SolidColorBrush(WheelSkinCatalog.WithAlpha(text, 12)),
-                IsHitTestVisible = false,
-            });
-
-            // 两条边界细线
-            var edge = new SolidColorBrush(WheelSkinCatalog.WithAlpha(text,
-                (byte)Math.Round(255 * (skin.InnerRingAlpha + 0.12))));
-            AddRing(canvas, cx, cy, outer, edge.Color, 1.0);
+            var edge = new SolidColorBrush(
+                WheelSkinCatalog.WithAlpha(text, (byte)Math.Round(255 * (skin.InnerRingAlpha * 0.62))));
             AddRing(canvas, cx, cy, inner, edge.Color, 1.0);
+            AddRing(canvas, cx, cy, outer, edge.Color, 1.0);
+        }
 
-            // 扇区分隔线：画在"两个槽位中间"，把环带切成 n 段
+        /// <summary>
+        /// 外侧图标环带：很淡的底 + 边界细线 + 把环带切成扇区的径向线 + 序号。
+        /// </summary>
+        private static void DrawRingBand(Canvas canvas, WheelMetrics m, WheelSkin skin, Color text,
+            double cx, double cy, double plateR)
+        {
+            double inner = plateR * WheelGeometry.RingBandInnerRatio;
+            double outer = plateR * WheelGeometry.RingBandOuterRatio;
+
+            AddAnnulus(canvas, cx, cy, inner, outer,
+                WheelSkinCatalog.WithAlpha(text, (byte)Math.Round(255 * 0.022)));
+
+            AddRing(canvas, cx, cy, inner,
+                WheelSkinCatalog.WithAlpha(text, (byte)Math.Round(255 * (skin.InnerRingAlpha * 0.55))), 1.0);
+
             int count = Math.Max(1, m.DirectionCount);
             double step = 360.0 / count;
-            var divider = new SolidColorBrush(WheelSkinCatalog.WithAlpha(text,
-                (byte)Math.Round(255 * (skin.SpokeAlpha + 0.06))));
+
+            // 分隔线画在两槽位中间，并从中心环一直延伸到外缘（和参考图一致）
+            double spokeInner = plateR * WheelGeometry.RingDonutInnerRatio;
+            var divider = new SolidColorBrush(
+                WheelSkinCatalog.WithAlpha(text, (byte)Math.Round(255 * skin.SpokeAlpha)));
 
             for (int i = 0; i < count; i++)
             {
@@ -168,8 +190,8 @@ namespace RadialLauncher.Services
 
                 canvas.Children.Add(new Line
                 {
-                    X1 = cx + inner * cos,
-                    Y1 = cy + inner * sin,
+                    X1 = cx + spokeInner * cos,
+                    Y1 = cy + spokeInner * sin,
                     X2 = cx + outer * cos,
                     Y2 = cy + outer * sin,
                     Stroke = divider,
@@ -178,23 +200,31 @@ namespace RadialLauncher.Services
                 });
             }
 
-            // 序号：贴在扇区外缘、稍微偏离图标一点，避免和名字打架
-            double badgeR = plateR * BadgeRadiusRatio;
-            double badgeSize = Math.Max(8, plateR * 0.062);
-            var badgeBrush = new SolidColorBrush(WheelSkinCatalog.WithAlpha(text, (byte)138));
+            // 序号：紧贴图标的顺时针一侧，和参考图一样"贴在图标边上"
+            double badgeR = plateR * WheelGeometry.RingBadgeRadiusRatio;
+            double badgeSize = Math.Max(9, plateR * 0.070);
+            var badgeFill = new SolidColorBrush(
+                WheelSkinCatalog.WithAlpha(text, (byte)Math.Round(255 * 0.95)));
 
             for (int i = 0; i < count; i++)
             {
-                double angle = -90.0 + step * (i + 0.30);
+                double angle = -90.0 + step * i + step * 0.175;
                 double rad = angle * Math.PI / 180.0;
 
                 var label = new TextBlock
                 {
                     Text = (i + 1).ToString(),
                     FontSize = badgeSize,
-                    FontWeight = FontWeights.SemiBold,
-                    Foreground = badgeBrush,
+                    FontWeight = FontWeights.Bold,
+                    Foreground = badgeFill,
                     IsHitTestVisible = false,
+                    Effect = new System.Windows.Media.Effects.DropShadowEffect
+                    {
+                        Color = Colors.Black,
+                        ShadowDepth = 0,
+                        BlurRadius = 4,
+                        Opacity = 0.9,
+                    },
                 };
                 label.Measure(new Size(double.PositiveInfinity, double.PositiveInfinity));
 
@@ -298,10 +328,7 @@ namespace RadialLauncher.Services
 
         // ============================ 选中扇区 ============================
 
-        /// <summary>
-        /// 环形布局下高亮选中的扇区（扇形楔块）。
-        /// 索引 -1 表示清掉高亮。
-        /// </summary>
+        /// <summary>环形布局下高亮选中的扇区。索引 -1 表示清掉。</summary>
         public static void DrawSelection(
             Canvas canvas,
             WheelMetrics m,
@@ -312,7 +339,6 @@ namespace RadialLauncher.Services
             double centerY,
             int index)
         {
-            // 复用同一个高亮层：先找到它，没有就建一个
             const string Tag = "selection-wedge";
             Shape? existing = null;
 
@@ -333,28 +359,30 @@ namespace RadialLauncher.Services
             double center = -90.0 + step * index;
 
             var geo = AnnularSector(centerX, centerY,
-                plateR * RingInnerRatio, plateR * RingOuterRatio,
-                center - step / 2 + 0.6, center + step / 2 - 0.6);
+                plateR * WheelGeometry.RingBandInnerRatio,
+                plateR * WheelGeometry.RingBandOuterRatio,
+                center - step / 2 + 0.9, center + step / 2 - 0.9);
+
+            var fill = new SolidColorBrush(WheelSkinCatalog.Fade(accent, 0.26));
+            var stroke = new SolidColorBrush(WheelSkinCatalog.Fade(accent, 0.75));
 
             if (existing is Path path)
             {
                 path.Data = geo;
-                path.Fill = new SolidColorBrush(WheelSkinCatalog.Fade(accent, 0.34));
-                path.Stroke = new SolidColorBrush(WheelSkinCatalog.Fade(accent, 0.85));
+                path.Fill = fill;
+                path.Stroke = stroke;
                 return;
             }
 
-            var wedge = new Path
+            canvas.Children.Add(new Path
             {
                 Data = geo,
-                Fill = new SolidColorBrush(WheelSkinCatalog.Fade(accent, 0.34)),
-                Stroke = new SolidColorBrush(WheelSkinCatalog.Fade(accent, 0.85)),
+                Fill = fill,
+                Stroke = stroke,
                 StrokeThickness = 1.2,
                 IsHitTestVisible = false,
                 Tag = Tag,
-            };
-
-            canvas.Children.Add(wedge);
+            });
         }
 
         private static Geometry AnnularSector(double cx, double cy,
@@ -431,87 +459,71 @@ namespace RadialLauncher.Services
 
         /// <summary>
         /// 槽位内容。
-        /// 环形布局：只有图标 + 名字（没有圆底、没有高光边框）——
-        ///   圆底一加上去就变成"一串浮动圆钮"，和游戏里那个环带完全不是一个东西。
+        /// 环形布局：只有图标，没有圆底、没有标签 —— 名字只在中心显示，
+        ///   这样图标能稳稳落在扇区中线上（带标签的纵向堆叠会把图标顶偏）。
         /// 浮动布局：图标 + 名字 + 顶部高光 + 边缘高光。
         /// </summary>
         public static FrameworkElement BuildSlotContent(
             WheelItem? item, double itemSize, WheelSkin skin, Color textColor, bool selected)
         {
             if (skin.RingLayout)
-                return BuildFlatSlotContent(item, itemSize, textColor, selected);
+                return BuildRingSlotContent(item, itemSize, textColor, selected);
 
             return BuildChippedSlotContent(item, itemSize, skin, textColor, selected);
         }
 
-        private static FrameworkElement BuildFlatSlotContent(
+        /// <summary>环形布局的槽位：一个居中的图标，仅此而已。</summary>
+        private static FrameworkElement BuildRingSlotContent(
             WheelItem? item, double itemSize, Color textColor, bool selected)
         {
-            var stack = new StackPanel
+            var host = new Grid
             {
-                Orientation = Orientation.Vertical,
-                HorizontalAlignment = HorizontalAlignment.Center,
-                VerticalAlignment = VerticalAlignment.Center,
+                Width = itemSize,
+                Height = itemSize,
                 IsHitTestVisible = false,
             };
 
-            double iconSize = itemSize * 0.62;
-            var image = TryResolveIcon(item, itemSize);
+            // 图标占环带宽度的大约四分之三：填满整条环带会显得拥挤
+            double iconSize = itemSize * 0.72;
+            var image = TryResolveIcon(item, iconSize);
 
+            FrameworkElement visual;
             if (image != null)
             {
-                stack.Children.Add(new Image
+                visual = new Image
                 {
                     Source = image,
                     Width = iconSize,
                     Height = iconSize,
                     Stretch = Stretch.Uniform,
-                    Opacity = selected ? 1.0 : 0.92,
-                    Effect = new System.Windows.Media.Effects.DropShadowEffect
-                    {
-                        Color = Colors.Black,
-                        BlurRadius = 6,
-                        ShadowDepth = 0,
-                        Opacity = 0.5,
-                    },
-                });
+                    Opacity = selected ? 1.0 : 0.95,
+                };
             }
             else
             {
-                stack.Children.Add(new TextBlock
+                visual = new TextBlock
                 {
                     Text = string.IsNullOrWhiteSpace(item?.Icon) ? "＋" : item!.Icon,
-                    FontSize = Math.Max(14, itemSize * 0.50),
-                    HorizontalAlignment = HorizontalAlignment.Center,
+                    FontSize = Math.Max(15, itemSize * 0.66),
                     Foreground = new SolidColorBrush(
-                        WheelSkinCatalog.WithAlpha(textColor, selected ? (byte)255 : (byte)200)),
-                });
-            }
-
-            if (item != null && !string.IsNullOrWhiteSpace(item.Name))
-            {
-                stack.Children.Add(new TextBlock
-                {
-                    Text = item.Name,
-                    FontSize = Math.Max(8, itemSize * 0.145),
-                    HorizontalAlignment = HorizontalAlignment.Center,
+                        WheelSkinCatalog.WithAlpha(textColor, selected ? (byte)255 : (byte)215)),
                     TextAlignment = TextAlignment.Center,
-                    TextTrimming = TextTrimming.CharacterEllipsis,
-                    MaxWidth = itemSize * 1.15,
-                    Foreground = new SolidColorBrush(
-                        WheelSkinCatalog.WithAlpha(textColor, selected ? (byte)255 : (byte)205)),
-                    Margin = new Thickness(0, 2, 0, 0),
-                    Effect = new System.Windows.Media.Effects.DropShadowEffect
-                    {
-                        Color = Colors.Black,
-                        BlurRadius = 4,
-                        ShadowDepth = 0,
-                        Opacity = 0.65,
-                    },
-                });
+                };
             }
 
-            return stack;
+            visual.Effect = new System.Windows.Media.Effects.DropShadowEffect
+            {
+                Color = Colors.Black,
+                BlurRadius = 6,
+                ShadowDepth = 0,
+                Opacity = 0.55,
+            };
+
+            // 居中 —— 不加 Label，避免把图标顶偏
+            visual.HorizontalAlignment = HorizontalAlignment.Center;
+            visual.VerticalAlignment = VerticalAlignment.Center;
+            host.Children.Add(visual);
+            return host;
         }
 
         private static FrameworkElement BuildChippedSlotContent(
@@ -555,8 +567,72 @@ namespace RadialLauncher.Services
                 Fill = null,
             });
 
-            grid.Children.Add(BuildFlatSlotContent(item, itemSize, textColor, selected));
+            grid.Children.Add(BuildLabeledSlotContent(item, itemSize, textColor, selected));
             return grid;
+        }
+
+        private static FrameworkElement BuildLabeledSlotContent(
+            WheelItem? item, double itemSize, Color textColor, bool selected)
+        {
+            var stack = new StackPanel
+            {
+                Orientation = Orientation.Vertical,
+                HorizontalAlignment = HorizontalAlignment.Center,
+                VerticalAlignment = VerticalAlignment.Center,
+                IsHitTestVisible = false,
+            };
+
+            var image = TryResolveIcon(item, itemSize);
+
+            if (image != null)
+            {
+                stack.Children.Add(new Image
+                {
+                    Source = image,
+                    Width = itemSize * WheelGeometry.IconImageFactor,
+                    Height = itemSize * WheelGeometry.IconImageFactor,
+                    Stretch = Stretch.Uniform,
+                    HorizontalAlignment = HorizontalAlignment.Center,
+                });
+            }
+            else
+            {
+                stack.Children.Add(new TextBlock
+                {
+                    Text = string.IsNullOrWhiteSpace(item?.Icon) ? "●" : item!.Icon,
+                    FontSize = Math.Max(12, itemSize * WheelGeometry.IconFontFactor),
+                    HorizontalAlignment = HorizontalAlignment.Center,
+                    TextAlignment = TextAlignment.Center,
+                    Foreground = new SolidColorBrush(textColor),
+                });
+            }
+
+            if (item != null && !string.IsNullOrWhiteSpace(item.Name))
+            {
+                var label = new TextBlock
+                {
+                    Text = item.Name,
+                    FontSize = Math.Max(8, itemSize * WheelGeometry.LabelFontFactor),
+                    HorizontalAlignment = HorizontalAlignment.Center,
+                    TextAlignment = TextAlignment.Center,
+                    TextTrimming = TextTrimming.CharacterEllipsis,
+                    MaxWidth = itemSize * WheelGeometry.LabelMaxWidthFactor,
+                    Foreground = new SolidColorBrush(textColor),
+                    Margin = new Thickness(0, 1, 0, 0),
+                };
+
+                label.Effect = new System.Windows.Media.Effects.DropShadowEffect
+                {
+                    Color = Colors.Black,
+                    BlurRadius = 3,
+                    ShadowDepth = 0,
+                    Opacity = 0.55,
+                };
+
+                stack.Children.Add(label);
+            }
+
+            return stack;
         }
 
         // ============================ 图标 ============================
@@ -637,6 +713,22 @@ namespace RadialLauncher.Services
                 Fill = null,
                 IsHitTestVisible = false,
             }, cx - radius, cy - radius);
+        }
+
+        private static void AddAnnulus(Canvas canvas, double cx, double cy,
+            double inner, double outer, Color color)
+        {
+            var geometry = new PathGeometry { FillRule = FillRule.EvenOdd };
+            geometry.Figures.Add(CircleFigure(cx, cy, outer));
+            geometry.Figures.Add(CircleFigure(cx, cy, inner));
+            geometry.Freeze();
+
+            canvas.Children.Add(new Path
+            {
+                Data = geometry,
+                Fill = new SolidColorBrush(color),
+                IsHitTestVisible = false,
+            });
         }
     }
 }
