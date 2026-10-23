@@ -34,6 +34,12 @@ namespace RadialLauncher.Views
         private double _targetOpacity = 1.0;
         private bool _clickThrough = true;
 
+        // 环形布局下"高亮整个扇区"要用到的绘制参数
+        private WheelMetrics? _metrics;
+        private WheelSkin _skin = WheelSkinCatalog.Default;
+        private Color _accentColor = Colors.OrangeRed;
+        private Color _textColor = Colors.White;
+
         /// <summary>用户在轮盘上单击了某个选项。</summary>
         public event EventHandler<WheelItem>? ItemActivated;
 
@@ -223,36 +229,44 @@ namespace RadialLauncher.Views
             double itemSize = g.ItemSize;
             double radius = g.Radius;
             double windowSize = g.WindowSize;
-            double plateDiameter = g.PlateDiameter;
 
             Width = windowSize;
             Height = windowSize;
 
-            GlowEllipse.Width = plateDiameter;
-            GlowEllipse.Height = plateDiameter;
-            GlowEllipse.Visibility = appearance.ShowGlow ? Visibility.Visible : Visibility.Collapsed;
+            // 皮肤只决定装饰风格（辐条/双环/渐变强度），颜色仍来自外观设置里的五个字段
+            var skin = WheelSkinCatalog.Get(appearance.Skin);
 
-            PlateEllipse.Width = plateDiameter;
-            PlateEllipse.Height = plateDiameter;
+            var backgroundColor = BrushHelper.ParseColor(
+                appearance.BackgroundColor, Color.FromArgb(0xE6, 0x1A, 0x1A, 0x2E));
+            var borderColor = BrushHelper.ParseColor(
+                appearance.BorderColor, Color.FromRgb(0x4A, 0x9E, 0xFF));
+            var itemColor = BrushHelper.ParseColor(
+                appearance.ItemColor, Color.FromArgb(0xE6, 0x2A, 0x2A, 0x3A));
+            var selectedColor = BrushHelper.ParseColor(
+                appearance.ItemSelectedColor, Color.FromRgb(0xFF, 0x6B, 0x35));
+            var textColor = BrushHelper.ParseColor(appearance.TextColor, Colors.White);
 
-            InnerEllipse.Width = g.InnerDiameter;
-            InnerEllipse.Height = g.InnerDiameter;
+            var textBrush = new SolidColorBrush(textColor);
 
-            // 配色
-            var backgroundBrush = BrushHelper.FromHex(appearance.BackgroundColor, Color.FromArgb(0xE6, 0x1A, 0x1A, 0x2E));
-            var borderBrush = BrushHelper.FromHex(appearance.BorderColor, Color.FromRgb(0x4A, 0x9E, 0xFF));
-            var itemBrush = BrushHelper.FromHex(appearance.ItemColor, Color.FromArgb(0xE6, 0x2A, 0x2A, 0x3A));
-            var selectedBrush = BrushHelper.FromHex(appearance.ItemSelectedColor, Color.FromRgb(0xFF, 0x6B, 0x35));
-            var textBrush = BrushHelper.FromHex(appearance.TextColor, Colors.White);
+            _metrics = g;
+            _skin = skin;
+            _accentColor = selectedColor;
+            _textColor = textColor;
 
-            PlateEllipse.Fill = backgroundBrush;
-            PlateEllipse.Stroke = borderBrush;
-            PlateEllipse.StrokeThickness = g.BorderThickness;
+            // 环形布局没有"圆钮底"，槽位就是一尊图标浮在环带上；
+            // 选中反馈靠背景层画的扇形高亮，所以这里底刷一律透明。
+            var itemBrush = skin.RingLayout
+                ? (Brush)Brushes.Transparent
+                : WheelPainter.SlotBrush(itemColor, skin, selected: false);
+            var selectedBrush = skin.RingLayout
+                ? (Brush)Brushes.Transparent
+                : WheelPainter.SlotBrush(selectedColor, skin, selected: true);
 
-            if (GlowEllipse.Effect is System.Windows.Media.Effects.DropShadowEffect glow)
-                glow.Color = ((SolidColorBrush)borderBrush).Color;
-
-            InnerEllipse.Fill = new SolidColorBrush(((SolidColorBrush)textBrush).Color) { Opacity = 0.12 };
+            // 背景装饰：外发光 / 底盘径向渐变 / 双环 / 辐条 / 中心刻度 / 中心盘
+            Decor.Width = windowSize;
+            Decor.Height = windowSize;
+            WheelPainter.DrawBackground(Decor, g, skin, backgroundColor, borderColor, textColor,
+                windowSize / 2, windowSize / 2, appearance.ShowGlow);
 
             Menu.Width = windowSize;
             Menu.Height = windowSize;
@@ -269,7 +283,10 @@ namespace RadialLauncher.Views
             CenterSubtitle.Foreground = new SolidColorBrush(((SolidColorBrush)textBrush).Color) { Opacity = 0.6 };
             CenterTitle.FontSize = Math.Max(11, 14 * scale);
             CenterSubtitle.FontSize = Math.Max(9, 11 * scale);
-            CenterTitle.MaxWidth = radius * 0.9;
+
+            // 中心文字必须待在中心盘里面 —— 之前用 radius*0.9 会宽出盘外
+            CenterTitle.MaxWidth = g.InnerDiameter * 0.80;
+            CenterSubtitle.MaxWidth = g.InnerDiameter * 0.80;
 
             // 重建选项
             Menu.Children.Clear();
@@ -279,130 +296,31 @@ namespace RadialLauncher.Views
 
             for (int i = 0; i < count; i++)
             {
-                var button = CreateItemButton(_items[i], itemSize, buttonStyle, textBrush, itemBrush);
+                var content = WheelPainter.BuildSlotContent(
+                    _items[i], itemSize, skin, textColor, selected: false);
+
+                var button = new Button
+                {
+                    Style = buttonStyle,
+                    Content = content,
+                    Width = itemSize,
+                    Height = itemSize,
+                    Background = itemBrush,
+                    // 环形布局不要那圈内阴影，否则每个透明槽位都会显出个黑圆环
+                    BorderBrush = skin.RingLayout ? Brushes.Transparent : new SolidColorBrush(Color.FromArgb(0x40, 0, 0, 0)),
+                    BorderThickness = new Thickness(skin.RingLayout ? 0 : 2),
+                    ToolTip = string.IsNullOrWhiteSpace(_items[i].Name) ? null : _items[i].Name,
+                    RenderTransform = new ScaleTransform(1, 1),
+                    RenderTransformOrigin = new Point(0.5, 0.5),
+                    IsHitTestVisible = false,
+                };
+
                 Menu.Children.Add(button);
             }
 
             // 选项换了，选中状态要清掉
             Menu.ClearSelection();
             UpdateCenterHint();
-        }
-
-        private Button CreateItemButton(
-            WheelItem item, double itemSize, Style style, Brush textBrush, Brush itemBrush)
-        {
-            var content = BuildItemContent(item, itemSize, textBrush);
-
-            var button = new Button
-            {
-                Style = style,
-                Content = content,
-                Width = itemSize,
-                Height = itemSize,
-                Background = itemBrush,
-                BorderBrush = textBrush,
-                ToolTip = string.IsNullOrWhiteSpace(item.Name) ? null : item.Name,
-                RenderTransform = new ScaleTransform(1, 1),
-                RenderTransformOrigin = new Point(0.5, 0.5),
-                IsHitTestVisible = false,
-            };
-
-            return button;
-        }
-
-        private static UIElement BuildItemContent(WheelItem item, double itemSize, Brush textBrush)
-        {
-            var stack = new StackPanel
-            {
-                Orientation = Orientation.Vertical,
-                HorizontalAlignment = HorizontalAlignment.Center,
-                VerticalAlignment = VerticalAlignment.Center,
-            };
-
-            var image = TryResolveIconImage(item, itemSize);
-
-            if (image != null)
-            {
-                stack.Children.Add(new Image
-                {
-                    Source = image,
-                    Width = itemSize * WheelGeometry.IconImageFactor,
-                    Height = itemSize * WheelGeometry.IconImageFactor,
-                    Stretch = Stretch.Uniform,
-                    HorizontalAlignment = HorizontalAlignment.Center,
-                });
-            }
-            else
-            {
-                stack.Children.Add(new TextBlock
-                {
-                    Text = string.IsNullOrWhiteSpace(item.Icon) ? "●" : item.Icon,
-                    FontSize = Math.Max(12, itemSize * WheelGeometry.IconFontFactor),
-                    HorizontalAlignment = HorizontalAlignment.Center,
-                    Foreground = textBrush,
-                    TextAlignment = TextAlignment.Center,
-                });
-            }
-
-            if (!string.IsNullOrWhiteSpace(item.Name))
-            {
-                stack.Children.Add(new TextBlock
-                {
-                    Text = item.Name,
-                    FontSize = Math.Max(8, itemSize * WheelGeometry.LabelFontFactor),
-                    HorizontalAlignment = HorizontalAlignment.Center,
-                    TextAlignment = TextAlignment.Center,
-                    TextTrimming = TextTrimming.CharacterEllipsis,
-                    MaxWidth = itemSize * WheelGeometry.LabelMaxWidthFactor,
-                    Foreground = textBrush,
-                    Margin = new Thickness(0, 1, 0, 0),
-                });
-            }
-
-            return stack;
-        }
-
-        /// <summary>
-        /// 图标解析优先级：IconPath == "auto" 时自动从目标提取 → IconPath 是真实文件 → emoji。
-        /// </summary>
-        private static ImageSource? TryResolveIconImage(WheelItem item, double itemSize)
-        {
-            try
-            {
-                var iconPath = item.IconPath?.Trim() ?? "";
-
-                if (string.Equals(iconPath, "auto", StringComparison.OrdinalIgnoreCase))
-                {
-                    var target = item.ActionType switch
-                    {
-                        "LaunchApp" => IconService.GuessExecutable(item.ActionValue),
-                        "OpenFolder" => item.ActionValue,
-                        "Script" => item.ActionValue,
-                        _ => "",
-                    };
-
-                    var icon = IconService.GetIcon(target);
-                    if (icon != null) return icon;
-                }
-                else if (!string.IsNullOrWhiteSpace(iconPath) && System.IO.File.Exists(iconPath))
-                {
-                    var bitmap = new BitmapImage();
-                    bitmap.BeginInit();
-                    bitmap.UriSource = new Uri(iconPath, UriKind.Absolute);
-                    bitmap.CacheOption = BitmapCacheOption.OnLoad;
-                    bitmap.DecodePixelWidth = (int)Math.Max(
-                        WheelGeometry.MinIconDecodeWidth, itemSize * WheelGeometry.IconDecodeFactor);
-                    bitmap.EndInit();
-                    bitmap.Freeze();
-                    return bitmap;
-                }
-            }
-            catch (Exception ex)
-            {
-                Logger.Debug($"加载图标失败（{item.IconPath}）：{ex.Message}");
-            }
-
-            return null;
         }
 
         // ============================ 选中与交互 ============================
@@ -432,6 +350,8 @@ namespace RadialLauncher.Views
         {
             var item = SelectedItem;
 
+            UpdateSectorHighlight();
+
             if (item != null)
             {
                 CenterTitle.Text = item.Name;
@@ -443,6 +363,17 @@ namespace RadialLauncher.Views
             CenterTitle.Text = _items.Count == 0 ? Loc.T("Wheel_Empty") : Loc.T("Wheel_Release");
             CenterSubtitle.Text = Loc.T("Wheel_Cancel");
             AnimateSelection();
+        }
+
+        /// <summary>
+        /// 环形布局下把选中的扇区整块点亮（浮动圆钮布局不需要，由换背景色负责）。
+        /// </summary>
+        private void UpdateSectorHighlight()
+        {
+            if (_metrics == null || !_skin.RingLayout) return;
+
+            WheelPainter.DrawSelection(Decor, _metrics, _skin, _accentColor, _textColor,
+                Width / 2, Height / 2, Menu.SelectedIndex);
         }
 
         /// <summary>选中的选项弹一下，给点反馈。</summary>

@@ -86,6 +86,13 @@ namespace RadialLauncher.Models
 
         /// <summary>选中后是否自动执行（松开触发键时）。关闭则必须点击。</summary>
         public bool ExecuteOnRelease { get; set; } = true;
+
+        /// <summary>
+        /// 轮盘皮肤：default（默认）/ genshin（原神）。
+        /// 皮肤只决定装饰风格（辐条、双环、渐变强度等）；上面那五个颜色才是实际用色，
+        /// 切换皮肤时由设置面板把预设配色一并写进这五个字段，之后仍可自行微调。
+        /// </summary>
+        public string Skin { get; set; } = "default";
     }
 
     /// <summary>触发环境（白/黑名单）与应用专属轮盘开关。</summary>

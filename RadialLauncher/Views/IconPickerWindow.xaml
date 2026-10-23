@@ -3,12 +3,13 @@
         xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
         xmlns:services="clr-namespace:RadialLauncher.Services"
         Title="{Binding [Icon_Title], Source={x:Static services:Loc.Instance}}"
-        Width="520" Height="480"
+        Width="540" Height="580"
         WindowStartupLocation="CenterOwner"
         ShowInTaskbar="False">
 
     <Grid Margin="14">
         <Grid.RowDefinitions>
+            <RowDefinition Height="Auto"/>
             <RowDefinition Height="Auto"/>
             <RowDefinition Height="*"/>
             <RowDefinition Height="Auto"/>
@@ -18,7 +19,20 @@
         <TextBlock Grid.Row="0" Text="{Binding [Icon_Hint], Source={x:Static services:Loc.Instance}}"
                    TextWrapping="Wrap" Foreground="#666666" Margin="0,0,0,10"/>
 
-        <ScrollViewer Grid.Row="1" VerticalScrollBarVisibility="Auto" Padding="0,0,6,0">
+        <!-- 原神图标包（从游戏快捷轮盘截图提取，白色字形 + alpha） -->
+        <StackPanel Grid.Row="1" Margin="0,0,0,10">
+            <TextBlock Text="{Binding [Icon_Genshin], Source={x:Static services:Loc.Instance}}"
+                       FontWeight="SemiBold" Margin="0,0,0,6"/>
+            <ItemsControl x:Name="GenshinList">
+                <ItemsControl.ItemsPanel>
+                    <ItemsPanelTemplate>
+                        <WrapPanel/>
+                    </ItemsPanelTemplate>
+                </ItemsControl.ItemsPanel>
+            </ItemsControl>
+        </StackPanel>
+
+        <ScrollViewer Grid.Row="2" VerticalScrollBarVisibility="Auto" Padding="0,0,6,0">
             <ItemsControl x:Name="EmojiList">
                 <ItemsControl.ItemsPanel>
                     <ItemsPanelTemplate>
@@ -28,7 +42,7 @@
             </ItemsControl>
         </ScrollViewer>
 
-        <Grid Grid.Row="2" Margin="0,12,0,0">
+        <Grid Grid.Row="3" Margin="0,12,0,0">
             <Grid.ColumnDefinitions>
                 <ColumnDefinition Width="Auto"/>
                 <ColumnDefinition Width="90"/>
@@ -48,7 +62,7 @@
                     ToolTip="从“启动应用”的目标 exe 或文件夹里提取系统图标"/>
         </Grid>
 
-        <StackPanel Grid.Row="3" Orientation="Horizontal" HorizontalAlignment="Right" Margin="0,12,0,0">
+        <StackPanel Grid.Row="4" Orientation="Horizontal" HorizontalAlignment="Right" Margin="0,12,0,0">
             <Button Content="{Binding [Common_Cancel], Source={x:Static services:Loc.Instance}}"
                     Click="OnCancel" Padding="18,6" IsCancel="True"/>
         </StackPanel>

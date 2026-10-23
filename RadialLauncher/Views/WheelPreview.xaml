@@ -3,7 +3,19 @@
              xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
              MinHeight="240"
              ClipToBounds="True">
-    <Border Background="#22000000" CornerRadius="6" BorderBrush="#22000000" BorderThickness="1">
+    <!--
+      预览底板必须是深色：轮盘底盘本身是半透明的（默认 #CC…/#E6…），
+      放在浅色卡片上会被"洗白"，看起来跟实际唤出的效果完全不一样。
+      这里用一层很淡的深色渐变模拟桌面背景。
+    -->
+    <Border CornerRadius="6" BorderThickness="1" BorderBrush="#33000000">
+        <Border.Background>
+            <LinearGradientBrush StartPoint="0,0" EndPoint="1,1">
+                <GradientStop Color="#FF262231" Offset="0"/>
+                <GradientStop Color="#FF191723" Offset="0.55"/>
+                <GradientStop Color="#FF2B2331" Offset="1"/>
+            </LinearGradientBrush>
+        </Border.Background>
         <Canvas x:Name="Surface" ClipToBounds="True"/>
     </Border>
 </UserControl>

@@ -118,6 +118,7 @@ namespace RadialLauncher.Views
             BuildBuiltinCombo();
             BuildLanguageCombo();
             BuildFontCombo();
+            BuildSkinCombo();
             LoadAll();
 
             _statusTimer = new DispatcherTimer(DispatcherPriority.Background)
@@ -202,6 +203,8 @@ namespace RadialLauncher.Views
                 TxtHeaderVersion.Text = GetVersionText();
                 SelectFontItem(c.System.UiFont);
                 UpdateDataDirNote();
+
+                SelectSkinItem(c.Appearance.Skin);
 
                 // 界面外观 + 测试模式
                 CbDarkMode.IsChecked = c.System.DarkMode;
@@ -623,6 +626,76 @@ namespace RadialLauncher.Views
             a.ItemColor = TxtItem.Text;
             a.ItemSelectedColor = TxtSel.Text;
             a.TextColor = TxtText.Text;
+        }
+
+        // ==================== 轮盘皮肤 ====================
+
+        private void BuildSkinCombo()
+        {
+            bool previous = _loading;
+            _loading = true;
+            try
+            {
+                CmbSkin.Items.Clear();
+                foreach (var skin in WheelSkinCatalog.All)
+                {
+                    CmbSkin.Items.Add(new ComboBoxItem
+                    {
+                        Content = Loc.Instance.IsEnglish ? skin.En : skin.Zh,
+                        Tag = skin.Id,
+                    });
+                }
+            }
+            finally
+            {
+                _loading = previous;
+            }
+        }
+
+        private void SelectSkinItem(string id)
+        {
+            bool previous = _loading;
+            _loading = true;
+            try
+            {
+                foreach (var item in CmbSkin.Items)
+                {
+                    if (item is ComboBoxItem { Tag: string tag } &&
+                        string.Equals(tag, id, StringComparison.OrdinalIgnoreCase))
+                    {
+                        CmbSkin.SelectedItem = item;
+                        return;
+                    }
+                }
+
+                if (CmbSkin.Items.Count > 0) CmbSkin.SelectedIndex = 0;
+            }
+            finally
+            {
+                _loading = previous;
+            }
+        }
+
+        /// <summary>
+        /// 换皮肤：换的是装饰风格，同时把该皮肤自带的预设配色填进五个颜色字段。
+        /// 填完之后用户仍可继续微调 —— 皮肤不锁死颜色。
+        /// </summary>
+        private void OnSkinChanged(object sender, SelectionChangedEventArgs e)
+        {
+            if (!CanHandleEvents) return;
+            if (CmbSkin.SelectedItem is not ComboBoxItem { Tag: string id }) return;
+
+            _working.Appearance.Skin = id;
+
+            var preset = WheelSkinCatalog.PresetFor(id);
+            TxtBg.Text = preset.Background;
+            TxtBorder.Text = preset.Border;
+            TxtItem.Text = preset.Item;
+            TxtSel.Text = preset.ItemSelected;
+            TxtText.Text = preset.Text;
+
+            UpdateColorSwatches();
+            UpdateAppearancePreview();
         }
 
         private void UpdateColorSwatches()
@@ -1785,6 +1858,9 @@ namespace RadialLauncher.Views
             c.Profiles = _profiles.ToList();
 
             c.Appearance.ItemCount = RbDir8.IsChecked == true ? 8 : 4;
+
+            if (CmbSkin.SelectedItem is ComboBoxItem { Tag: string skinId })
+                c.Appearance.Skin = skinId;
             ApplyColorsToWorking();
             c.Appearance.Scale = SldScale.Value;
             c.Appearance.ItemSize = SldItemSize.Value;

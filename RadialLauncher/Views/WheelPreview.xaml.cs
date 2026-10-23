@@ -9,7 +9,13 @@ using RadialLauncher.Services;
 
 namespace RadialLauncher.Views
 {
-    /// <summary>外观页的实时预览：按当前配置画一个小号的轮盘。</summary>
+    /// <summary>
+    /// 外观页的实时预览。
+    ///
+    /// <para>绘制全部委托给 <see cref="WheelPainter"/> —— 和真实轮盘用的是同一套代码，
+    /// 所以这里看到的层次（发光、双环、辐条、刻度、槽位高光）就是唤出时的样子。
+    /// 之前预览是自己另画一遍，皮肤一改就会和实际不一致。</para>
+    /// </summary>
     public partial class WheelPreview : UserControl
     {
         private AppearanceSettings _appearance = new();
@@ -43,47 +49,38 @@ namespace RadialLauncher.Views
 
             int directionCount = WheelGeometry.NormalizeDirectionCount(_appearance.ItemCount);
 
-            // 缩放以适应预览区域。fit 系数由 WheelGeometry 按“该方向数真实的窗口尺寸”算出，
+            // fit 系数由 WheelGeometry 按“该方向数真实的窗口尺寸”算出，
             // 因此四向轮盘（窗口更大）也能完整显示，不会被裁掉一圈。
             double fit = WheelGeometry.FitScaleFor(_appearance, directionCount, size);
-
             var g = WheelGeometry.Compute(_appearance, directionCount, fit);
-            double itemSize = g.ItemSize;
-            double radius = g.Radius;
-            double plateRadius = g.PlateRadius;
 
-            var background = BrushHelper.ParseColor(_appearance.BackgroundColor, Color.FromArgb(0xE6, 0x1A, 0x1A, 0x2E));
-            var border = BrushHelper.ParseColor(_appearance.BorderColor, Color.FromRgb(0x4A, 0x9E, 0xFF));
-            var itemColor = BrushHelper.ParseColor(_appearance.ItemColor, Color.FromArgb(0xE6, 0x2A, 0x2A, 0x3A));
-            var selectedColor = BrushHelper.ParseColor(_appearance.ItemSelectedColor, Color.FromRgb(0xFF, 0x6B, 0x35));
+            var skin = WheelSkinCatalog.Get(_appearance.Skin);
+
+            var backgroundColor = BrushHelper.ParseColor(
+                _appearance.BackgroundColor, Color.FromArgb(0xE6, 0x1A, 0x1A, 0x2E));
+            var borderColor = BrushHelper.ParseColor(
+                _appearance.BorderColor, Color.FromRgb(0x4A, 0x9E, 0xFF));
+            var itemColor = BrushHelper.ParseColor(
+                _appearance.ItemColor, Color.FromArgb(0xE6, 0x2A, 0x2A, 0x3A));
+            var selectedColor = BrushHelper.ParseColor(
+                _appearance.ItemSelectedColor, Color.FromRgb(0xFF, 0x6B, 0x35));
             var textColor = BrushHelper.ParseColor(_appearance.TextColor, Colors.White);
 
-            // 底板
-            var plate = new Ellipse
-            {
-                Width = plateRadius * 2,
-                Height = plateRadius * 2,
-                Fill = new SolidColorBrush(background),
-                Stroke = new SolidColorBrush(border),
-                StrokeThickness = 1.5,
-            };
+            // 背景装饰（会把 canvas 清空，所以必须先画）
+            WheelPainter.DrawBackground(Surface, g, skin, backgroundColor, borderColor, textColor,
+                centerX, centerY, _appearance.ShowGlow);
 
-            if (_appearance.ShowGlow)
+            // 选中扇区要压在槽位下面，所以先画
+            if (skin.RingLayout)
             {
-                plate.Effect = new System.Windows.Media.Effects.DropShadowEffect
-                {
-                    Color = border,
-                    BlurRadius = Math.Max(8, plateRadius * 0.25),
-                    ShadowDepth = 0,
-                    Opacity = 0.65,
-                };
+                WheelPainter.DrawSelection(Surface, g, skin, selectedColor, textColor,
+                    centerX, centerY, _selectedIndex);
             }
 
-            Canvas.SetLeft(plate, centerX - plateRadius);
-            Canvas.SetTop(plate, centerY - plateRadius);
-            Surface.Children.Add(plate);
+            // 槽位
+            double itemSize = g.ItemSize;
+            double radius = g.Radius;
 
-            // 选项
             for (int i = 0; i < directionCount; i++)
             {
                 double angle = -90 + (360.0 / directionCount) * i;
@@ -94,38 +91,32 @@ namespace RadialLauncher.Views
 
                 bool isSelected = i == _selectedIndex;
                 bool hasItem = i < _items.Count;
+                var item = hasItem ? _items[i] : null;
 
-                var dot = new Ellipse
+                // 圆底：只有浮动圆钮布局才有；环形布局的槽位是"裸图标浮在环带上"
+                if (!skin.RingLayout)
                 {
-                    Width = itemSize,
-                    Height = itemSize,
-                    Fill = new SolidColorBrush(isSelected ? selectedColor : itemColor),
-                    Stroke = new SolidColorBrush(Color.FromArgb(0x66, textColor.R, textColor.G, textColor.B)),
-                    StrokeThickness = 1,
-                    Opacity = hasItem ? 1.0 : 0.35,
-                };
-
-                Canvas.SetLeft(dot, x - itemSize / 2);
-                Canvas.SetTop(dot, y - itemSize / 2);
-                Surface.Children.Add(dot);
+                    var dot = new Ellipse
+                    {
+                        Width = itemSize,
+                        Height = itemSize,
+                        Fill = WheelPainter.SlotBrush(
+                            isSelected ? selectedColor : itemColor, skin, isSelected),
+                        Opacity = hasItem ? 1.0 : 0.42,
+                        IsHitTestVisible = false,
+                    };
+                    Canvas.SetLeft(dot, x - itemSize / 2);
+                    Canvas.SetTop(dot, y - itemSize / 2);
+                    Surface.Children.Add(dot);
+                }
 
                 if (!hasItem) continue;
 
-                var item = _items[i];
-
-                var label = new TextBlock
-                {
-                    Text = string.IsNullOrWhiteSpace(item.Icon) ? "●" : item.Icon,
-                    FontSize = Math.Max(9, itemSize * WheelGeometry.IconFontFactor),
-                    Foreground = new SolidColorBrush(textColor),
-                    TextAlignment = TextAlignment.Center,
-                    Width = itemSize,
-                };
-
-                label.Measure(new Size(double.PositiveInfinity, double.PositiveInfinity));
-                Canvas.SetLeft(label, x - itemSize / 2);
-                Canvas.SetTop(label, y - label.DesiredSize.Height / 2);
-                Surface.Children.Add(label);
+                // 高光 + 边光 + 图标 + 名字（与真实轮盘同一份实现）
+                var content = WheelPainter.BuildSlotContent(item, itemSize, skin, textColor, isSelected);
+                Canvas.SetLeft(content, x - itemSize / 2);
+                Canvas.SetTop(content, y - itemSize / 2);
+                Surface.Children.Add(content);
             }
 
             // 中心提示
@@ -135,6 +126,7 @@ namespace RadialLauncher.Views
                 FontSize = 10.5,
                 Foreground = new SolidColorBrush(Color.FromArgb(0xBB, textColor.R, textColor.G, textColor.B)),
                 TextAlignment = TextAlignment.Center,
+                IsHitTestVisible = false,
             };
 
             hint.Measure(new Size(double.PositiveInfinity, double.PositiveInfinity));

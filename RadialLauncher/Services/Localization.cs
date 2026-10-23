@@ -217,6 +217,9 @@ namespace RadialLauncher.Services
             ["Profiles_DeleteConfirm"] = "确定删除配置“{0}”吗？",
 
             // 外观
+            ["Appearance_SkinGroup"] = "轮盘皮肤",
+            ["Appearance_SkinHint"] = "皮肤决定装饰风格（辐条、双环、渐变纵深）。切换皮肤会同时套用该皮肤的预设配色，套用之后仍可在下面继续微调颜色。",
+            ["Icon_Genshin"] = "原神图标包（从游戏轮盘截图提取）",
             ["Appearance_Direction"] = "轮盘方向数",
             ["Appearance_Dir4"] = "四向",
             ["Appearance_Dir8"] = "八向",
@@ -500,6 +503,9 @@ namespace RadialLauncher.Services
             ["Profiles_DeleteConfirm"] = "Delete the profile \"{0}\"?",
 
             // Appearance
+            ["Appearance_SkinGroup"] = "Wheel skin",
+            ["Appearance_SkinHint"] = "The skin controls the decoration style (spokes, double ring, gradient depth). Switching also applies that skin's preset colours — you can still fine-tune them below.",
+            ["Icon_Genshin"] = "Genshin icon pack (extracted from the in-game wheel)",
             ["Appearance_Direction"] = "Directions",
             ["Appearance_Dir4"] = "Four-way",
             ["Appearance_Dir8"] = "Eight-way",

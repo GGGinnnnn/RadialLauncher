@@ -15,12 +15,14 @@
         Width="480" Height="480">
 
     <Window.Resources>
-        <!-- 圆形选项按钮；尺寸由代码按配置设置 -->
+        <!--
+          圆形槽位。层次由 Content 负责（见 WheelPainter.BuildSlotContent：
+          顶部高光 + 边缘高光 + 图标 + 名字），这里只画最底下的渐变圆底，
+          外加一圈极淡的内阴影让圆底看起来是凹进去的。
+        -->
         <Style x:Key="WheelButtonStyle" TargetType="Button">
             <Setter Property="Foreground" Value="White"/>
             <Setter Property="Background" Value="#E62A2A3A"/>
-            <Setter Property="BorderBrush" Value="#66FFFFFF"/>
-            <Setter Property="BorderThickness" Value="1.5"/>
             <Setter Property="Cursor" Value="Arrow"/>
             <Setter Property="Focusable" Value="False"/>
             <Setter Property="IsHitTestVisible" Value="False"/>
@@ -29,7 +31,10 @@
                 <Setter.Value>
                     <ControlTemplate TargetType="Button">
                         <Grid>
-                            <Ellipse Fill="{TemplateBinding Background}"
+                            <!-- 渐变圆底（选中/未选中由代码整份换画刷；环形布局下是透明） -->
+                            <Ellipse Fill="{TemplateBinding Background}"/>
+                            <!-- 内阴影：贴边压暗一圈，做出凹陷层次（环形布局下厚度设 0 即可关掉） -->
+                            <Ellipse Fill="Transparent"
                                      Stroke="{TemplateBinding BorderBrush}"
                                      StrokeThickness="{TemplateBinding BorderThickness}"/>
                             <ContentPresenter HorizontalAlignment="Center" VerticalAlignment="Center"/>
@@ -46,31 +51,17 @@
             <ScaleTransform x:Name="RootScale" ScaleX="1" ScaleY="1"/>
         </Grid.RenderTransform>
 
-        <!-- 外发光 -->
-        <Ellipse x:Name="GlowEllipse"
-                 Width="380" Height="380"
-                 IsHitTestVisible="False"
-                 Opacity="0.75">
-            <Ellipse.Effect>
-                <DropShadowEffect Color="#FF4A9EFF" BlurRadius="48" ShadowDepth="0" Opacity="1"/>
-            </Ellipse.Effect>
-        </Ellipse>
+        <!--
+          背景装饰层：外发光 / 底盘径向渐变 / 双环 / 辐条 / 中心刻度 / 中心盘，
+          全部由 WheelPainter.DrawBackground 画进这个 Canvas。
+          这样真实窗口与设置面板预览共用同一套绘制代码，不会各自漂移。
+        -->
+        <Canvas x:Name="Decor"
+                HorizontalAlignment="Center"
+                VerticalAlignment="Center"
+                IsHitTestVisible="False"/>
 
-        <!-- 底板 -->
-        <Ellipse x:Name="PlateEllipse"
-                 Width="380" Height="380"
-                 Fill="#E61A1A2E"
-                 Stroke="#FF4A9EFF"
-                 StrokeThickness="2"
-                 IsHitTestVisible="False"/>
-
-        <!-- 内圈装饰 -->
-        <Ellipse x:Name="InnerEllipse"
-                 Width="130" Height="130"
-                 Fill="#1FFFFFFF"
-                 IsHitTestVisible="False"/>
-
-        <!-- 轮盘本体 -->
+        <!-- 槽位本体 -->
         <controls:RadialMenu x:Name="Menu"
                              ItemCount="8"
                              Radius="144"

@@ -2,6 +2,7 @@ using System;
 using System.Windows;
 using System.Windows.Controls;
 using System.Windows.Media;
+using System.Windows.Shapes;
 using RadialLauncher.Services;
 
 namespace RadialLauncher.Views
@@ -45,7 +46,61 @@ namespace RadialLauncher.Views
             SelectedIconPath = currentIconPath ?? "";
             CustomBox.Text = SelectedIcon;
 
+            BuildGenshinGrid();
             BuildEmojiGrid();
+        }
+
+        /// <summary>
+        /// 内置原神图标包。
+        /// 图标是「白色字形 + alpha」，直接放在浅色对话框上会看不见，
+        /// 所以每个按钮里垫一个深色圆底 —— 和它在轮盘上的实际观感一致。
+        /// </summary>
+        private void BuildGenshinGrid()
+        {
+            foreach (var (slug, zh, en) in GenshinIcons.Catalog)
+            {
+                var image = GenshinIcons.Load(slug, 64);
+
+                var face = new Grid { Width = 38, Height = 38 };
+                face.Children.Add(new Ellipse { Fill = new SolidColorBrush(Color.FromRgb(0x2B, 0x28, 0x33)) });
+
+                if (image != null)
+                {
+                    face.Children.Add(new Image
+                    {
+                        Source = image,
+                        Width = 23,
+                        Height = 23,
+                        Stretch = Stretch.Uniform,
+                        HorizontalAlignment = HorizontalAlignment.Center,
+                        VerticalAlignment = VerticalAlignment.Center,
+                    });
+                }
+
+                var button = new Button
+                {
+                    Content = face,
+                    Width = 44,
+                    Height = 44,
+                    Margin = new Thickness(0, 0, 5, 5),
+                    Cursor = System.Windows.Input.Cursors.Hand,
+                    Background = Brushes.Transparent,
+                    BorderBrush = new SolidColorBrush(Color.FromArgb(0x22, 0, 0, 0)),
+                    BorderThickness = new Thickness(1),
+                    ToolTip = Loc.Instance.IsEnglish ? en : zh,
+                };
+
+                var captured = slug;
+                button.Click += (_, _) =>
+                {
+                    SelectedIconPath = "genshin:" + captured;
+                    SelectedIcon = "";
+                    DialogResult = true;
+                    Close();
+                };
+
+                GenshinList.Items.Add(button);
+            }
         }
 
         /// <summary>弹出图标选择器；取消返回 null。</summary>

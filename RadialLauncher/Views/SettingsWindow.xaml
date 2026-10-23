@@ -555,6 +555,16 @@
 
                         <ScrollViewer Grid.Column="0" VerticalScrollBarVisibility="Auto" Margin="0,0,14,0">
                             <StackPanel>
+                                <!-- 轮盘皮肤 -->
+                                <GroupBox Header="{Binding [Appearance_SkinGroup], Source={x:Static services:Loc.Instance}}">
+                                    <StackPanel>
+                                        <ComboBox x:Name="CmbSkin" Width="240" HorizontalAlignment="Left"
+                                                  SelectionChanged="OnSkinChanged"/>
+                                        <TextBlock Margin="0,8,0,0" Style="{StaticResource HintText}"
+                                                   Text="{Binding [Appearance_SkinHint], Source={x:Static services:Loc.Instance}}"/>
+                                    </StackPanel>
+                                </GroupBox>
+
                                 <GroupBox Header="{Binding [Appearance_Direction], Source={x:Static services:Loc.Instance}}">
                                     <StackPanel Orientation="Horizontal">
                                         <RadioButton x:Name="RbDir4" GroupName="Dir" Checked="OnDirectionChanged"

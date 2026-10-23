@@ -12,10 +12,10 @@
 		<ApplicationIcon>Resources\app.ico</ApplicationIcon>
 
 		<!-- 版本：文件版本 0.6.0.0，关于页显示 v0.6 -->
-		<Version>0.7.1</Version>
-		<AssemblyVersion>0.7.1.0</AssemblyVersion>
-		<FileVersion>0.7.1.0</FileVersion>
-		<InformationalVersion>0.7.1</InformationalVersion>
+		<Version>0.8.0</Version>
+		<AssemblyVersion>0.8.0.0</AssemblyVersion>
+		<FileVersion>0.8.0.0</FileVersion>
+		<InformationalVersion>0.8</InformationalVersion>
 
 		<AssemblyTitle>Radial Launcher</AssemblyTitle>
 		<Product>Radial Launcher</Product>
@@ -89,6 +89,15 @@
 
 	<ItemGroup>
 		<PackageReference Include="H.NotifyIcon.Wpf" Version="2.1.3" />
+	</ItemGroup>
+
+	<!--
+	  原神风图标包：从游戏截图里提取出来的白色字形（带 alpha，可任意着色）。
+	  必须显式声明成 Resource，否则单文件发布时它们不会被编进程序集。
+	-->
+	<ItemGroup>
+		<None Remove="Resources\Genshin\*.png" />
+		<Resource Include="Resources\Genshin\*.png" />
 	</ItemGroup>
 
 </Project>
